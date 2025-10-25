@@ -1,4 +1,3 @@
-```markdown
 # Projekt — Interaktywny symulator powodzi 2D
 
 ## 1. Krótkie streszczenie
@@ -47,23 +46,21 @@ Interaktywny symulator powodzi w terenie 2D. Użytkownik tworzy mapy (rzeki, ter
 - Noise / generowanie terenu: FastNoise lub libnoise (opcjonalnie)
 - Format zapisu: JSON (nlohmann/json) lub własny binarny format
 
-Uwaga: używając Qt jako systemu okienkowego, nie jest konieczne GLFW; użyć QOpenGLWidget/QOpenGLWindow dla wygodnej integracji. Projekt w MVP ma być prosty i przenośny — bez dodatkowych technologii do akceleracji obliczeń.
-
 ## 5. Model fizyczny i algorytmy
 
 Proponowane podejścia (kolejność od prostszych do bardziej zaawansowanych — na start warto zacząć od najprostszej, stabilnej wersji):
 
 A) Model przepływu oparty na regule wysokości (prosty, stabilny — dobry dla wersji demonstracyjnej)
 - Reprezentacja: regularna siatka komórek (heightmap, rozdzielczość np. 200×200, parametrycale dx,dy).
-- Każda komórka ma: wysokość terenu h_terrain, głębokość wody w (water depth), prędkość (opcjonalnie) vx, vy.
-- Przepływ między sąsiednimi komórkami proporcjonalny do różnicy całkowitej wysokości (h_total = h_terrain + water depth):
+- Każda komórka ma: wysokość terenu - **h_terrain**, głębokość wody **w** (water depth), prędkość  **vx**, **vy**.
+- Przepływ między sąsiednimi komórkami proporcjonalny do różnicy całkowitej wysokości (**h_total** = **h_terrain** + **water depth**):
   Q_ij = k * max(0, h_total_i - h_total_j)
 - Ograniczenia przepływu: pojemność koryta (maxDepth), przeszkody: przepływ = 0
 - Czas krokowy: explicit, water_depth += Σ(inflow - outflow) * dt / area
 - Stabilność: zadbać o małe dt lub skalowanie k; proste tłumienia (straty energii) przy przepływie
 
 B) Ulepszenia (opcjonalne do późniejszego etapu)
-- Uproszczone równania shallow-water (Saint-Venant) — jeśli zespół ma doświadczenie i chce zwiększyć fizyczną wierność.
+- Uproszczone równania shallow-water (Saint-Venant) jeśli chcemy się nauczyć czegoś wiećej i zwiększyć realizm fizyki.
 - Wersja MVP: najpierw zaimplementować A i dobrze ją przetestować przed wprowadzaniem bardziej zaawansowanych metod.
 
 Parametry fizyczne (przykładowe):
@@ -73,33 +70,32 @@ Parametry fizyczne (przykładowe):
 - stała czasu symulacji: deltaTime adaptatywne lub stałe (np. 0.02s) z kontrolą CFL-like ograniczeń dla stabilności
 
 ## 6. Architektura systemu (moduły)
-- app/
-  - main.cpp — inicjalizacja Qt i uruchomienie aplikacji
-  - UI/
-    - MainWindow (layout, panele kontrolne)
-    - MapEditorWidget (narzędzia do rysowania mapy)
-    - SimulationControls (play/pause/step/tempo)
-  - Renderer/
-    - GLRenderer (obsługa QOpenGLWidget, VAO/VBO, shadery)
-    - WaterShader.glsl, TerrainShader.glsl
-  - Simulation/
-    - Grid (siatka komórek)
-    - Simulator (główna pętla, kroki czasowe)
-    - FlowModel (algorytm przepływu, parametry)
-  - IO/
-    - MapSerializer (JSON/BIN)
-    - Exporter (CSV, png zrzuty)
-  - Utils/
-    - Logger (prosty wrapper)
-    - Timer (deltaTime)
-- tests/ — testy jednostkowe
+## Struktura projektu
 
-Interfejsy (przykładowo)
-- Simulator::step(double dt)
-- Grid::getCell(x,y) -> {terrain, water, velocity}
-- Renderer::updateFromGrid(Grid&) — wystarczy mapowanie buforów teksturowych
+- `app/` — kod aplikacji desktopowej
+  - `main.cpp` — inicjalizacja Qt i uruchomienie aplikacji
+  - `UI/`
+    - `MainWindow` — layout główny, panele kontrolne i docki
+    - `MapEditorWidget` — narzędzia do rysowania i edycji mapy
+    - `SimulationControls` — przyciski i suwaki: Play / Pause / Step / Speed
+  - `Renderer/`
+    - `GLRenderer` — obsługa `QOpenGLWidget`, VAO/VBO, zarządzanie shaderami
+    - `shaders/`
+      - `WaterShader.glsl`, `TerrainShader.glsl` — shadery fragment/vertex
+  - `Simulation/`
+    - `Grid` — reprezentacja siatki komórek (terrain, water, flags)
+    - `Simulator` — pętla symulacji, zarządzanie krokami czasowymi
+    - `FlowModel` — implementacja reguły przepływu i parametry fizyczne
+  - `IO/`
+    - `MapSerializer` — zapis/odczyt mapy (JSON / binarny)
+    - `Exporter` — eksport danych: CSV, PNG (zrzuty stanu)
+  - `Utils/`
+    - `Logger` — prosty wrapper logowania
+    - `Timer` — pomiar deltaTime, pomoc w profilowaniu
+- `assets/` — przykładowe mapy, tekstury (opcjonalnie)
+- `tests/` — testy jednostkowe i integracyjne (Grid, FlowModel, Simulator)
 
-Przekazywanie danych między symulacją a rendererem:
+## Przekazywanie danych między symulacją a rendererem:
 - Szybkie: udostępnianie tekstury (floating point) zawierającej wysokość wody → shader czyta i koloruje
 - Alternatywa: VBO z punktami terenu + colormap
 
@@ -111,11 +107,12 @@ Przekazywanie danych między symulacją a rendererem:
   - Parametry symulacji: k, maxDepth, intensywność opadów
   - Widok 2D (QOpenGLWidget): render sceny + overlay (wartość w punkcie po najechaniu)
   - Panel wykresów: objętość wody w czasie, lokalne profile
+- Prosta przykładowa makieta w figmie, aby każdy wiedział i miał taki sam obraz końcowego UI.
 
 ## 8. Rendering wody — propozycja implementacji
 - Zamiast rysować geometrię dla każdej kropli, wykorzystać teksturę 2D (height/water depth) jako wejście dla fragment shadera:
   - Vertex: prostokąt ekranowy (full-screen quad) reprezentujący widok siatki
-  - Fragment: pobierz waterDepth, terrainHeight, oblicz color = colormap(waterDepth)
+  - Fragment: pobieramy **waterDepth**, **terrainHeight**, obliczamy **color** = colormap(**waterDepth**)
   - Dodatek: normal mapa generowana z heightmapy (np. nabla) dla oświetlenia i refleksów
 - Efekty:
   - Gradient kolorów wg głębokości (jasny -> płytko, ciemny -> głęboko)
@@ -126,12 +123,15 @@ Przekazywanie danych między symulacją a rendererem:
 ## 9. Podział zadań 
 Celem: przydzielić zadania tak, by początkujący otrzymał prostsze, ale wartościowe prace.
 
+W trakcie projektu można dostosować podział zadań w zależności od postępów i występujących trudności.
+
 A) Filip — Odpowiedzialny za silnik symulacji 
 - Implementacja Grid i podstawowego FlowModel (reguła wysokości).
 - Zapewnienie stabilnego kroku czasowego i jednostek.
 - Obsługa opadów, pojemności koryta, przeszkód.
 - Unit testy kluczowych komponentów symulacji.
 - Dokumentacja API symulatora.
+- CI/CD: konfiguracja budowania i testów.
 
 B) Patryk — Odpowiedzialny za rendering i integrację OpenGL 
 - Implementacja GLRenderer (QOpenGLWidget), shadery do wody i terenu.
@@ -144,12 +144,15 @@ C) Maria — Odpowiedzialny za UI, edytor mapy i IO
 - Implementacja głównego okna Qt i paneli kontrolnych.
 - Narzędzia edycji mapy: pędzel wysokości, tryb rzeki, ustawianie przeszkód (proste operacje painting na siatce).
 - Zapis/odczyt mapy (JSON) i eksport podstawowy (png/CSV).
-- Implementacja przycisków Play/Pause/Step i podłączanie ich do Simulator::step.
+- Implementacja przycisków Play/Pause/Step i podłączanie ich do symulatora.
 - Testy manualne i instrukcja użytkownika (how-to).
 - Przygotowanie prostych scenariuszy testowych (przykładowe mapy).
+- Makieta w figmie do wizualizacji UI (opcjonalnie).
+
 
 ## 10. Kamienie milowe 
 Milestone 0 ( tydzień 1 )
+- Zapoznanie się z dokumentacją i tutorialami Qt + OpenGL
 - Projekt repozytorium + CMake + zależności
 - Minimalne QT app z QOpenGLWidget (czyste okno)
 - Prosty Grid i „static” heightmap ładowany z pliku
@@ -208,11 +211,21 @@ Milestone 4 ( tydzień 6 — opcjonalnie )
 - maxDepth (koryto) = 3.0
 - opady (intensity) = 0.01 (jednostka/dt)
 
-## 16. Dalsze rozszerzenia (po ukończeniu MVP)
+## 16. CI/CD flow
+ - Pre-commit:
+    - Sprawdzenie formatowania kodu (clang-format)
+    - Linting (clang-tidy)\
+    - Wszystko za pomocą narzędia [pre-commit](https://pre-commit.com/) (ewentualnie husky)
+ - CI za pomocą GitHub Actions:
+    - Build
+    - Testy jednostkowe
+    - Linting
+ - CD:
+    - Automatyczne tworzenie release'ów z binarkami na GitHub Releases
+
+## 17. Dalsze rozszerzenia (po ukończeniu MVP)
 - Model erozji i sedymentacji (termodynamika terenu)
 - Symulacja sedymentów / zanieczyszczeń
 - Visualizacja 3D (meshy terenu) z wysokością
 - Współpraca z GIS (import DEM)
 - Obsługa czasu rzeczywistego w wielu skalach (mikro/makro)
-
----
