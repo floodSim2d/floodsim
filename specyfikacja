@@ -1,0 +1,218 @@
+```markdown
+# Projekt — Interaktywny symulator powodzi 2D
+
+## 1. Krótkie streszczenie
+Interaktywny symulator powodzi w terenie 2D. Użytkownik tworzy mapy (rzeki, teren, przeszkody), ustawia parametry (opady, przepustowość koryta) i obserwuje przepływ wody, przelewy i zalewanie obszarów w czasie rzeczywistym. Wizualizacja z wykorzystaniem OpenGL (woda — shadery, efekty), interfejs i narzędzia edycji mapy w Qt. Obliczenia numeryczne realizowane przez dedykowaną warstwę symulacyjną z wykorzystaniem bibliotek do algebry liniowej.
+
+## 2. Cele projektu
+- Interaktywna edycja mapy: rzeki, wysokość terenu, przeszkody.
+- Realistyczne, stabilne i czytelne obliczanie przepływu wody w 2D.
+- Wizualne przedstawienie poziomu wody i prędkości przepływu (kolory, cieniowanie).
+- Eksport/import map i wyników symulacji.
+- Przyjazny interfejs użytkownika (Qt) z kontrolkami symulacji (pause/play/step, tempo, parametry).
+
+## 3. Zakres funkcjonalny
+- Edytor mapy:
+  - Rysowanie/zmiana wysokości terenu (heightmap grid).
+  - Rysowanie koryt rzek i przeszkód (nieprzepuszczalne komórki).
+  - Ustawienie źródeł opadów i intensywności.
+  - Zapis/ładowanie mapy (np. JSON lub binarny heightmap).
+- Silnik symulacji:
+  - Model przepływu (patrz 5 — algorytmy).
+  - Opady (dawka wody dodawana co krok).
+  - Pojemność koryta rzeki (maks. głębokość przed przelewem).
+  - Przepływ proporcjonalny do różnic wysokości i pojemności sąsiednich komórek.
+  - Obsługa przeszkód i drenażu (opcjonalnie).
+- Wizualizacja (OpenGL):
+  - Rysowanie terenu i wody (kolor wg głębokości + prędkość).
+  - Shaderowe efekty powierzchni wody (refleksy, falowanie na podstawie prędkości).
+  - Nakładki informacyjne: wektor prędkości, mapa ciepła, wykresy czasu.
+- Interfejs (Qt):
+  - Panele ustawień, kontrolki symulacji, narzędzia edycji.
+  - Możliwość podglądu wartości komórki (wysokość, głębokość, prędkość).
+- Analiza i eksport:
+  - Generowanie wykresów (np. całkowita objętość wody w czasie).
+  - Eksport danych symulacji (CSV, obrazy, zrzuty stanu).
+
+## 4. Technologie i zależności
+- Język: C++23
+- Budowanie: CMake
+- UI: Qt 6 (QWidgets + QOpenGLWidget lub QOpenGLWindow)
+- Rendering: OpenGL 4.5 (shadery GLSL)
+- Ładowanie tekstur/assetów: stb_image (opcjonalnie)
+- Wektory/macierze: GLM (opcjonalnie, header-only)
+- Algebra liniowa / obliczenia numeryczne: Eigen3 (opcjonalnie)
+- Logowanie: std::cout / prosty logger (można dodać spdlog później)
+- Testy jednostkowe: Catch2 lub GoogleTest
+- Noise / generowanie terenu: FastNoise lub libnoise (opcjonalnie)
+- Format zapisu: JSON (nlohmann/json) lub własny binarny format
+
+Uwaga: używając Qt jako systemu okienkowego, nie jest konieczne GLFW; użyć QOpenGLWidget/QOpenGLWindow dla wygodnej integracji. Projekt w MVP ma być prosty i przenośny — bez dodatkowych technologii do akceleracji obliczeń.
+
+## 5. Model fizyczny i algorytmy
+
+Proponowane podejścia (kolejność od prostszych do bardziej zaawansowanych — na start warto zacząć od najprostszej, stabilnej wersji):
+
+A) Model przepływu oparty na regule wysokości (prosty, stabilny — dobry dla wersji demonstracyjnej)
+- Reprezentacja: regularna siatka komórek (heightmap, rozdzielczość np. 200×200, parametrycale dx,dy).
+- Każda komórka ma: wysokość terenu h_terrain, głębokość wody w (water depth), prędkość (opcjonalnie) vx, vy.
+- Przepływ między sąsiednimi komórkami proporcjonalny do różnicy całkowitej wysokości (h_total = h_terrain + water depth):
+  Q_ij = k * max(0, h_total_i - h_total_j)
+- Ograniczenia przepływu: pojemność koryta (maxDepth), przeszkody: przepływ = 0
+- Czas krokowy: explicit, water_depth += Σ(inflow - outflow) * dt / area
+- Stabilność: zadbać o małe dt lub skalowanie k; proste tłumienia (straty energii) przy przepływie
+
+B) Ulepszenia (opcjonalne do późniejszego etapu)
+- Uproszczone równania shallow-water (Saint-Venant) — jeśli zespół ma doświadczenie i chce zwiększyć fizyczną wierność.
+- Wersja MVP: najpierw zaimplementować A i dobrze ją przetestować przed wprowadzaniem bardziej zaawansowanych metod.
+
+Parametry fizyczne (przykładowe):
+- intensywność opadów: mm/s → odpowiednik jednostkowy w pikselach
+- pojemność koryta rzeki: maxDepth (np. 0.5 jednostki)
+- współczynnik przepływu k: 0.1..1.0 (skalowalny)
+- stała czasu symulacji: deltaTime adaptatywne lub stałe (np. 0.02s) z kontrolą CFL-like ograniczeń dla stabilności
+
+## 6. Architektura systemu (moduły)
+- app/
+  - main.cpp — inicjalizacja Qt i uruchomienie aplikacji
+  - UI/
+    - MainWindow (layout, panele kontrolne)
+    - MapEditorWidget (narzędzia do rysowania mapy)
+    - SimulationControls (play/pause/step/tempo)
+  - Renderer/
+    - GLRenderer (obsługa QOpenGLWidget, VAO/VBO, shadery)
+    - WaterShader.glsl, TerrainShader.glsl
+  - Simulation/
+    - Grid (siatka komórek)
+    - Simulator (główna pętla, kroki czasowe)
+    - FlowModel (algorytm przepływu, parametry)
+  - IO/
+    - MapSerializer (JSON/BIN)
+    - Exporter (CSV, png zrzuty)
+  - Utils/
+    - Logger (prosty wrapper)
+    - Timer (deltaTime)
+- tests/ — testy jednostkowe
+
+Interfejsy (przykładowo)
+- Simulator::step(double dt)
+- Grid::getCell(x,y) -> {terrain, water, velocity}
+- Renderer::updateFromGrid(Grid&) — wystarczy mapowanie buforów teksturowych
+
+Przekazywanie danych między symulacją a rendererem:
+- Szybkie: udostępnianie tekstury (floating point) zawierającej wysokość wody → shader czyta i koloruje
+- Alternatywa: VBO z punktami terenu + colormap
+
+## 7. UI — wymagania i widoki
+- Główne okno:
+  - Pasek narzędzi: nowa mapa, otwórz, zapisz, eksport
+  - Panel symulacji: Play/Pause, Step, Reset, Speed slider
+  - Narzędzia edycji terenu: pędzel wysokości, rzeki, przeszkody, źródła opadów
+  - Parametry symulacji: k, maxDepth, intensywność opadów
+  - Widok 2D (QOpenGLWidget): render sceny + overlay (wartość w punkcie po najechaniu)
+  - Panel wykresów: objętość wody w czasie, lokalne profile
+
+## 8. Rendering wody — propozycja implementacji
+- Zamiast rysować geometrię dla każdej kropli, wykorzystać teksturę 2D (height/water depth) jako wejście dla fragment shadera:
+  - Vertex: prostokąt ekranowy (full-screen quad) reprezentujący widok siatki
+  - Fragment: pobierz waterDepth, terrainHeight, oblicz color = colormap(waterDepth)
+  - Dodatek: normal mapa generowana z heightmapy (np. nabla) dla oświetlenia i refleksów
+- Efekty:
+  - Gradient kolorów wg głębokości (jasny -> płytko, ciemny -> głęboko)
+  - Linie prędkości (opcjonalnie) — render wektorów na overlay
+  - Foam/edge particles: procedurally shaderowane przy przepływie
+- Możliwe optymalizacje implementacyjne w ramach CPU+GPU bez naruszania prostoty: FBO i ping-pong tekstur dla renderingu. (Projekt MVP nie wymaga dodatkowych bibliotek do akceleracji obliczeń.)
+
+## 9. Podział zadań 
+Celem: przydzielić zadania tak, by początkujący otrzymał prostsze, ale wartościowe prace.
+
+A) Filip — Odpowiedzialny za silnik symulacji 
+- Implementacja Grid i podstawowego FlowModel (reguła wysokości).
+- Zapewnienie stabilnego kroku czasowego i jednostek.
+- Obsługa opadów, pojemności koryta, przeszkód.
+- Unit testy kluczowych komponentów symulacji.
+- Dokumentacja API symulatora.
+
+B) Patryk — Odpowiedzialny za rendering i integrację OpenGL 
+- Implementacja GLRenderer (QOpenGLWidget), shadery do wody i terenu.
+- Mapowanie danych symulacji do tekstur dla renderera.
+- Efekty wizualne: kolory wg głębokości, normal mapping, podstawowe animacje.
+- Profilowanie renderera i optymalizacja rysowania.
+- Pomoc przy integracji renderer ↔ simulator.
+
+C) Maria — Odpowiedzialny za UI, edytor mapy i IO 
+- Implementacja głównego okna Qt i paneli kontrolnych.
+- Narzędzia edycji mapy: pędzel wysokości, tryb rzeki, ustawianie przeszkód (proste operacje painting na siatce).
+- Zapis/odczyt mapy (JSON) i eksport podstawowy (png/CSV).
+- Implementacja przycisków Play/Pause/Step i podłączanie ich do Simulator::step.
+- Testy manualne i instrukcja użytkownika (how-to).
+- Przygotowanie prostych scenariuszy testowych (przykładowe mapy).
+
+## 10. Kamienie milowe 
+Milestone 0 ( tydzień 1 )
+- Projekt repozytorium + CMake + zależności
+- Minimalne QT app z QOpenGLWidget (czyste okno)
+- Prosty Grid i „static” heightmap ładowany z pliku
+
+Milestone 1 ( tydzień 2–3 )
+- Implementacja prostego flow model (reguła wysokości) i integracja ze sliderem dt
+- Prosty renderer: rysowanie heightmap + waterDepth (kolor)
+- UI: podstawowe kontrolki Play/Pause/Step
+
+Milestone 2 ( tydzień 4 )
+- Edytor mapy: pędzel wysokości, rzeki, przeszkody, zapis/ładowanie
+- Parametry symulacji GUI
+
+Milestone 3 ( tydzień 5 )
+- Efekty shaderowe (normal map, gradacja kolorów)
+- Testy stabilności i przykładowe mapy
+- Eksport wyników
+
+Milestone 4 ( tydzień 6 — opcjonalnie )
+- Ulepszenia modelu (opcjonalnie shallow water)
+- Finalne testy, dokumentacja, prezentacja
+
+## 11. Kryteria akceptacji (dla każdego milestona)
+- Milestone 1: działający krok symulacji z widoczną zmianą waterDepth po uruchomieniu opadów lub dodaniu wody ręcznie.
+- Milestone 2: edytor map i zapis/ładowanie mapy po restarcie aplikacji.
+- Milestone 3: czytelna wizualizacja głębokości wody i overlay z wartościami (np. hover pokazuje dane komórki).
+- W finalnej wersji: stabilność (brak „wybuchów” wartości), przybliżona zachowanie masy wody, możliwość eksportu wyników.
+
+## 12. Testy i walidacja
+- Testy jednostkowe: operacje na Grid, update przepływu, sumowanie całkowitej objętości wody.
+- Testy integracyjne: scenariusze (np. kanał rzeki z nadmiarem opadów — czy przelew zachodzi poprawnie).
+- Manualne: przypadki z przeszkodami i czy woda przepływa wokół nich.
+- Metryki: całkowita objętość wody w czasie, maksymalna głębokość, czas stabilizacji.
+
+## 13. Ryzyka i środki zaradcze
+- Niestabilność numeryczna → start od prostego modelu (A) i małego dt; wprowadzić automatyczny limit dt (CFL-like).
+- Wydajność przy dużych siatkach → redukcja rozdzielczości dla podglądu lub optymalizacje w kodzie (profilowanie i poprawa hotspotów).
+- Trudność implementacji shaderów → prostszy shader kolorujący + stopniowe dodawanie efektów.
+- Brak kompetencji jednego członka → przydzielić zadania tak, by miał wykonalne, widoczne prace (patrz osoba 3).
+
+## 14. Pliki i formaty (propozycje)
+- Map (.json)
+  - meta: width, height, dx, dy
+  - terrain: array<float> (height)
+  - obstacles: array<bool> lub maska
+  - river_capacity / initial_water: array<float>
+- Wyniki (.csv / .npz)
+  - czas, total_water_volume, max_depth, avg_depth
+- Snapshot obraz (png) — render z widoku
+
+## 15. Przykładowe parametry startowe
+- Grid: 200×200
+- dx = dy = 1.0 (jednostka)
+- dt = 0.02 (możliwe adaptacyjne)
+- k (przepływ) = 0.2
+- maxDepth (koryto) = 3.0
+- opady (intensity) = 0.01 (jednostka/dt)
+
+## 16. Dalsze rozszerzenia (po ukończeniu MVP)
+- Model erozji i sedymentacji (termodynamika terenu)
+- Symulacja sedymentów / zanieczyszczeń
+- Visualizacja 3D (meshy terenu) z wysokością
+- Współpraca z GIS (import DEM)
+- Obsługa czasu rzeczywistego w wielu skalach (mikro/makro)
+
+---
