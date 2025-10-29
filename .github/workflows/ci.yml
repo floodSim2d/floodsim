@@ -6,7 +6,7 @@ on:
     branches: ['*']
 
 jobs:
-  build-and-test:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,17 +17,33 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake clang clang-tidy qt6-base-dev
       - name: Build
-        run: cmake --build build/release -- -j$(nproc)
+        run: |
+          mkdir -p build/release
+          cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/release --config Release -- -j$(nproc)
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+            fetch-depth: 0
       - name: Run tests
         run: ctest --test-dir build/release/tests --output-on-failure
+  clang-tidy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+            fetch-depth: 0
       - name: Run clang-tidy
         run: |
-          cmake -S . -B build/release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-          if command -v run-clang-tidy >/dev/null 2>&1; then
-            run-clang-tidy -p build -quiet || true
-          else
-            echo "run-clang-tidy not available, skipping"
-          fi
+          ./scripts/clang-tidy.sh
+  clang-format:
+      runs-on: ubuntu-latest
+      needs: build
+      steps:
       - name: Format files (clang-format)
         run: |
             git config --global user.name "github-actions[bot]"
