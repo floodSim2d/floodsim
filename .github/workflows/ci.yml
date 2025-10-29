@@ -1,0 +1,42 @@
+name: CI
+on:
+  push:
+    branches: *
+  pull_request:
+    branches: *
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+            fetch-depth: 0
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake clang clang-tidy qt6-base-dev
+      - name: Build
+        run: cmake --build build/release -- -j$(nproc)
+      - name: Run tests
+        run: ctest --test-dir build/release/tests --output-on-failure
+      - name: Run clang-tidy
+        run: |
+          cmake -S . -B build/release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+          if command -v run-clang-tidy >/dev/null 2>&1; then
+            run-clang-tidy -p build -quiet || true
+          else
+            echo "run-clang-tidy not available, skipping"
+          fi
+      - name: Format files (clang-format)
+        run: |
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            ./scripts/clang-format.sh
+            git add .
+            if git diff --cached --quiet; then
+              echo "No changes to commit"
+            else
+              git commit -m "Apply clang-format via CI"
+              git push origin ${{ github.ref_name }}
+            fi
