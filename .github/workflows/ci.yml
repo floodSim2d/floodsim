@@ -14,6 +14,7 @@ jobs:
             fetch-depth: 0
       - name: Install dependencies
         run: |
+          sudo apt purge --auto-remove cmake
           sudo apt-get update
           sudo apt install -y ca-certificates gnupg wget
           test -f /usr/share/doc/kitware-archive-keyring/copyright ||
