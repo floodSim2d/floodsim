@@ -15,7 +15,10 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake clang clang-tidy qt6-base-dev
+          sudo apt-get install -y software-properties-common
+          sudo apt-add-repository -y ppa:kitware/cmake
+          sudo apt-get update
+          sudo apt-get install -y cmake clang clang-tidy qt6-base-dev ca-certificates gpg wget
       - name: Build
         run: |
           mkdir -p build/release
