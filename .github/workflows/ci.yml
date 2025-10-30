@@ -21,7 +21,7 @@ jobs:
           sudo mkdir -p /opt/cmake
           sudo sh cmake-4.1.2-linux-x86_64.sh --skip-license --prefix=/opt/cmake
           echo "/opt/cmake/bin" >> "$GITHUB_PATH"
-          sudo apt install -y ccache qt6-base-dev build-essential libgl1-mesa-dev
+          sudo apt install -y clang clang-tidy ccache qt6-base-dev build-essential libgl1-mesa-dev
       - name: Build
         run: |
           mkdir -p build/release
@@ -39,8 +39,8 @@ jobs:
             fetch-depth: 0
       - name: Install dependencies
         run: |
-          sudo apt update
-          sudo apt install -y clang clang-tidy
+              sudo apt update
+              sudo apt install -y clang-tidy
       - name: Run clang-tidy
         run: |
           chmod +x ./scripts/clang-tidy.sh
@@ -69,5 +69,5 @@ jobs:
                 echo "No changes to commit"
               else
                 git commit -m "Apply clang-format via CI"
-                git push origin ${{ github.ref_name }}
+                git push
               fi
