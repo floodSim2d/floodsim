@@ -15,14 +15,12 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          if [ ! -d /opt/cmake ]; then
-            sudo apt-get install -y wget
-            wget https://github.com/Kitware/CMake/releases/download/v4.1.2/cmake-4.1.2-linux-x86_64.sh
-            sudo mkdir -p /opt/cmake
-            sudo sh cmake-4.1.2-linux-x86_64.sh --skip-license --prefix=/opt/cmake
-            sudo ln -s /opt/cmake/bin/cmake /usr/local/bin/cmake
-          fi
-          echo "/opt/cmake/bin" >> $GITHUB_PATH
+          sudo apt remove -y cmake
+          sudo apt-get install -y wget
+          wget https://github.com/Kitware/CMake/releases/download/v4.1.2/cmake-4.1.2-linux-x86_64.sh
+          sudo mkdir -p /opt/cmake
+          sudo sh cmake-4.1.2-linux-x86_64.sh --skip-license --prefix=/opt/cmake
+          sudo ln -s /opt/cmake/bin/cmake /usr/local/bin/cmake
           sudo apt install -y ccache qt6-base-dev build-essential libgl1-mesa-dev
       - name: Build
         run: |
