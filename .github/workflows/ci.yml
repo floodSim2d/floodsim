@@ -1,0 +1,77 @@
+name: CI
+on:
+  push:
+    branches: ['*']
+  pull_request:
+    branches: ['*']
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+            fetch-depth: 0
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt remove -y cmake
+          sudo apt-get install -y wget
+          wget https://github.com/Kitware/CMake/releases/download/v4.1.2/cmake-4.1.2-linux-x86_64.sh
+          sudo mkdir -p /opt/cmake
+          sudo sh cmake-4.1.2-linux-x86_64.sh --skip-license --prefix=/opt/cmake
+          echo "/opt/cmake/bin" >> "$GITHUB_PATH"
+          sudo apt install -y clang clang-tidy ccache qt6-base-dev build-essential libgl1-mesa-dev
+      - name: Build
+        run: |
+          mkdir -p build/release
+          cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          cmake --build build/release --config Release -- -j$(nproc)
+      - name: Run tests
+        run: ctest --test-dir build/release/tests --output-on-failure
+  clang-tidy:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+            fetch-depth: 0
+      - name: Install dependencies
+        run: |
+              sudo apt update
+              sudo apt install -y clang-tidy
+      - name: Run clang-tidy
+        run: |
+          chmod +x ./scripts/clang-tidy.sh
+          ./scripts/clang-tidy.sh
+  clang-format:
+      runs-on: ubuntu-latest
+      needs: build-and-test
+      steps:
+        - uses: actions/checkout@v4
+          with:
+              fetch-depth: 0
+              ref: ${{ github.head_ref }}
+        - name: Install dependencies
+          run: |
+                sudo apt update
+                sudo apt install -y clang-format
+                python3 -m pip install --upgrade pip
+                python3 -m pip install pre-commit
+        - name: Format files (clang-format)
+          run: |
+              git config --global user.name "github-actions[bot]"
+              git config --global user.email "github-actions[bot]@users.noreply.github.com"
+              chmod +x ./scripts/clang-format.sh
+              ./scripts/clang-format.sh
+              git add .
+              if git diff --cached --quiet; then
+                echo "No changes to commit"
+              else
+                git commit -m "Apply clang-format via CI"
+                git push origin HEAD:${{ github.head_ref }}
+              fi
