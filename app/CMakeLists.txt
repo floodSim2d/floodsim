@@ -1,5 +1,7 @@
 add_executable(floodsim
     main.cpp
+        UI/MainWindow.h
+        UI/MainWindow.cpp
 )
 
 target_link_libraries(floodsim
