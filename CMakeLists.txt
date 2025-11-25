@@ -10,6 +10,8 @@ find_package(Qt6 COMPONENTS
         Core
         Gui
         Widgets
+        OpenGL
+        OpenGLWidgets
         REQUIRED)
 
 # Add app and tests subprojects

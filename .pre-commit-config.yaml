@@ -1,12 +1,6 @@
 repos:
   - repo: local
     hooks:
-      - id: clang-format
-        name: clang-format
-        entry: scripts/clang-format.sh
-        language: script
-        files: \.(cpp|hpp|c|h|cc|hh)$
-        stages: [pre-commit, pre-push]
       - id: clang-tidy
         name: clang-tidy
         entry: scripts/clang-tidy.sh
