@@ -18,6 +18,12 @@ add_executable(floodsim
         UI/MainWindow.cpp
         UI/MapView.h
         UI/MapView.cpp
+        Renderer/GLRenderer.cpp
+        Renderer/GLRenderer.h
+        Simulation/Grid.cpp
+        Simulation/Grid.h
+        Data/Cell.h
+        resources.qrc
 )
 
 target_link_libraries(floodsim PRIVATE

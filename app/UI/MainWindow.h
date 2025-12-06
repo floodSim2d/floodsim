@@ -1,8 +1,10 @@
 #pragma once
 #include <QMainWindow>
+#include <memory>
+
 
 class MapView;
-
+class Grid;
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
@@ -16,4 +18,5 @@ private:
     void setupStatusBar();
 
     MapView *mapView;
+    std::shared_ptr<Grid> m_grid;
 };
