@@ -58,6 +58,9 @@ void MapView::paintEvent(QPaintEvent *) {
 }
 
 void MapView::applyToolAt(int x, int y) {
+    if (currentTool == Tool::None)
+        return;
+
     // Oblicz promień pędzla. Dla rozmiaru 1, promień = 0. Dla 3, promień = 1, itd.
     int radius = (m_brushSize - 1) / 2;
 
@@ -77,14 +80,22 @@ void MapView::applyToolAt(int x, int y) {
                 case Tool::Terrain:
                     c.height = std::min(c.height + 1, 20);
                     break;
-                case Tool::Obstacle: c.obstacle = true; break;
-                case Tool::River: c.river = true; break;
-                case Tool::WaterSource: c.waterSource = true; break;
+                case Tool::Obstacle:
+                    c.obstacle = true;
+                    break;
+                case Tool::River:
+                    c.river = true;
+                    break;
+                case Tool::WaterSource:
+                    c.waterSource = true;
+                    c.water_depth = 5.0f; // <-- KLUCZOWA ZMIANA: Od razu dodajemy wodę
+                    break;
                 case Tool::Eraser:
                     c.height = 0;
                     c.obstacle = false;
                     c.river = false;
                     c.waterSource = false;
+                    c.water_depth = 0.0f; // <-- Dobra praktyka: Gumka też resetuje wodę
                     break;
                 default:
                     break;

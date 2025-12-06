@@ -14,6 +14,8 @@ GLRenderer::~GLRenderer()
     m_quadVBO.destroy();
     m_quadVAO.destroy();
     glDeleteTextures(1, &m_terrainTextureID);
+    glDeleteTextures(1, &m_waterTextureID);
+    glDeleteTextures(1, &m_attributesTextureID);
     delete m_terrainProgram;
     doneCurrent();
 }
@@ -50,13 +52,13 @@ void GLRenderer::setupGeometry()
 {
     float quadVertices[] = {
         // positions   // texture Coords
-        -1.0f,  1.0f,  0.0f, 0.0f, 1.0f,
-        -1.0f, -1.0f,  0.0f, 0.0f, 0.0f,
-         1.0f, -1.0f,  0.0f, 1.0f, 0.0f,
+        -1.0f,  1.0f,  0.0f, 0.0f, 0.0f, // Top-left vertex -> (0,0) tex coord
+        -1.0f, -1.0f,  0.0f, 0.0f, 1.0f, // Bottom-left vertex -> (0,1) tex coord
+         1.0f, -1.0f,  0.0f, 1.0f, 1.0f, // Bottom-right vertex -> (1,1) tex coord
 
-        -1.0f,  1.0f,  0.0f, 0.0f, 1.0f,
-         1.0f, -1.0f,  0.0f, 1.0f, 0.0f,
-         1.0f,  1.0f,  0.0f, 1.0f, 1.0f
+        -1.0f,  1.0f,  0.0f, 0.0f, 0.0f, // Top-left vertex -> (0,0) tex coord
+         1.0f, -1.0f,  0.0f, 1.0f, 1.0f, // Bottom-right vertex -> (1,1) tex coord
+         1.0f,  1.0f,  0.0f, 1.0f, 0.0f  // Top-right vertex -> (1,0) tex coord
     };
 
     m_quadVAO.create();
@@ -80,14 +82,51 @@ void GLRenderer::setupGeometry()
 
 void GLRenderer::setupTextures()
 {
-    glGenTextures(1, &m_terrainTextureID);
+    // Tworzymy tekstury tylko raz, przy pierwszym wywołaniu
+    if (m_terrainTextureID == 0) {
+        glGenTextures(1, &m_terrainTextureID);
+    }
     glBindTexture(GL_TEXTURE_2D, m_terrainTextureID);
     // Ustawienia filtrowania
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    // Alokacja pamięci na teksturę
+    // Ponowna alokacja pamięci na teksturę z nowym rozmiarem
     glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, m_grid->getWidth(), m_grid->getHeight(), 0, GL_RED, GL_FLOAT, nullptr);
     glBindTexture(GL_TEXTURE_2D, 0);
+
+    // Tekstura wody
+    if (m_waterTextureID == 0) {
+        glGenTextures(1, &m_waterTextureID);
+    }
+    glBindTexture(GL_TEXTURE_2D, m_waterTextureID);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    // Ponowna alokacja pamięci na teksturę z nowym rozmiarem
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, m_grid->getWidth(), m_grid->getHeight(), 0, GL_RED, GL_FLOAT, nullptr);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    // Tekstura atrybutów (przeszkody, rzeki, etc.)
+    if (m_attributesTextureID == 0) {
+        glGenTextures(1, &m_attributesTextureID);
+    }
+    glBindTexture(GL_TEXTURE_2D, m_attributesTextureID);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    // Użyjemy RGBA, żeby mieć miejsce na więcej flag w przyszłości
+    // R = obstacle, G = river, B = waterSource
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, m_grid->getWidth(), m_grid->getHeight(), 0, GL_RGB, GL_FLOAT, nullptr);
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void GLRenderer::handleGridResize() {
+    if (m_grid->getWidth() != m_gridWidth || m_grid->getHeight() != m_gridHeight) {
+        qDebug() << "Grid resized, re-creating textures.";
+        m_gridWidth = m_grid->getWidth();
+        m_gridHeight = m_grid->getHeight();
+
+        // Zamiast usuwać, po prostu ponownie skonfigurujemy tekstury z nowym rozmiarem
+        setupTextures();
+    }
 }
 
 void GLRenderer::updateTerrainTexture()
@@ -107,18 +146,76 @@ void GLRenderer::updateTerrainTexture()
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
+void GLRenderer::updateWaterTexture()
+{
+    // Przygotowanie bufora z danymi o głębokości wody
+    std::vector<float> waterData;
+    waterData.reserve(m_grid->getWidth() * m_grid->getHeight());
+    for (int y = 0; y < m_grid->getHeight(); ++y) {
+        for (int x = 0; x < m_grid->getWidth(); ++x) {
+            // Renderer teraz tylko odczytuje dane, niczego nie modyfikuje.
+            waterData.push_back(m_grid->getCell(x, y).water_depth);
+        }
+    }
+
+    glBindTexture(GL_TEXTURE_2D, m_waterTextureID);
+    // Wysłanie zaktualizowanych danych do GPU
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_grid->getWidth(), m_grid->getHeight(), GL_RED, GL_FLOAT, waterData.data());
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void GLRenderer::updateAttributesTexture()
+{
+    // Przygotowanie bufora z danymi o atrybutach
+    std::vector<float> attributesData;
+    // 3 kanały (R, G, B) na piksel
+    attributesData.reserve(m_grid->getWidth() * m_grid->getHeight() * 3);
+    for (int y = 0; y < m_grid->getHeight(); ++y) {
+        for (int x = 0; x < m_grid->getWidth(); ++x) {
+            const auto& cell = m_grid->getCell(x, y);
+            // Kanał R: przeszkoda (0.0 lub 1.0)
+            attributesData.push_back(cell.obstacle ? 1.0f : 0.0f);
+            // Kanał G: rzeka (0.0 lub 1.0)
+            attributesData.push_back(cell.river ? 1.0f : 0.0f);
+            // Kanał B: źródło wody (0.0 lub 1.0)
+            attributesData.push_back(cell.waterSource ? 1.0f : 0.0f);
+        }
+    }
+
+    glBindTexture(GL_TEXTURE_2D, m_attributesTextureID);
+    // Wysłanie zaktualizowanych danych do GPU
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_grid->getWidth(), m_grid->getHeight(), GL_RGB, GL_FLOAT, attributesData.data());
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 void GLRenderer::paintGL()
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    // Sprawdź, czy siatka zmieniła rozmiar i w razie potrzeby zaktualizuj tekstury
+    handleGridResize();
+
     updateTerrainTexture();
+    updateWaterTexture();
+    updateAttributesTexture();
 
     m_terrainProgram->bind();
     m_quadVAO.bind();
 
+    // Tekstura terenu na jednostce 0
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, m_terrainTextureID);
     m_terrainProgram->setUniformValue("terrainHeightmap", 0);
+
+    // Tekstura wody na jednostce 1
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, m_waterTextureID);
+    m_terrainProgram->setUniformValue("waterDepthmap", 1);
+
+    // Tekstura atrybutów na jednostce 2
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, m_attributesTextureID);
+    m_terrainProgram->setUniformValue("attributesMap", 2);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
 

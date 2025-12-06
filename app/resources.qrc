@@ -1,8 +1,8 @@
 <RCC>
     <qresource prefix="/">
-        <file>Renderer/shaders/TerrainShader.vert</file>
-        <file>Renderer/shaders/TerrainShader.frag</file>
-        <file>Renderer/shaders/WaterShader.vert</file>
-        <file>Renderer/shaders/WaterShader.frag</file>
+        <file alias="shaders/TerrainShader.vert">Renderer/shaders/TerrainShader.vert</file>
+        <file alias="shaders/TerrainShader.frag">Renderer/shaders/TerrainShader.frag</file>
+        <file alias="shaders/WaterShader.vert">Renderer/shaders/WaterShader.vert</file>
+        <file alias="shaders/WaterShader.frag">Renderer/shaders/WaterShader.frag</file>
     </qresource>
 </RCC>

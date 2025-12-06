@@ -26,11 +26,18 @@ private:
     void setupGeometry();
     void setupTextures();
     void updateTerrainTexture();
+    void updateWaterTexture();
+    void updateAttributesTexture();
+    void handleGridResize();
 
     std::shared_ptr<Grid> m_grid;
+    int m_gridWidth = 0;
+    int m_gridHeight = 0;
 
     QOpenGLShaderProgram* m_terrainProgram = nullptr;
     QOpenGLVertexArrayObject m_quadVAO;
     QOpenGLBuffer m_quadVBO;
     GLuint m_terrainTextureID = 0;
+    GLuint m_waterTextureID = 0;
+    GLuint m_attributesTextureID = 0;
 };

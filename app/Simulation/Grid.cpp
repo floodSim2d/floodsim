@@ -38,6 +38,7 @@ int Grid::index(int x, int y) const {
 
 void Grid::clear() {
     for (Cell &c : m_cells) {
+        c.water_depth = 0.0f;
         c.height = 0;
         c.obstacle = false;
         c.river = false;
@@ -55,6 +56,7 @@ bool Grid::saveToFile(const QString &path) {
 
     for (const Cell &c : m_cells) {
         out << c.height
+            << c.water_depth
             << c.obstacle
             << c.river
             << c.waterSource;
@@ -80,6 +82,7 @@ bool Grid::loadFromFile(const QString &path) {
 
     for (Cell &c : m_cells) {
         in >> c.height
+           >> c.water_depth
            >> c.obstacle
            >> c.river
            >> c.waterSource;

@@ -5,6 +5,7 @@
 
 class MapView;
 class Grid;
+class GLRenderer;
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
@@ -18,5 +19,6 @@ private:
     void setupStatusBar();
 
     MapView *mapView;
+    GLRenderer *glRenderer;
     std::shared_ptr<Grid> m_grid;
 };

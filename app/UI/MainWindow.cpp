@@ -29,10 +29,10 @@ MainWindow::MainWindow(QWidget *parent)
     QHBoxLayout *mainLayout = new QHBoxLayout(central);
 
     QWidget *left  = setupLeftPanel();
-    // Tymczasowo zamieniamy widok 2D na renderer OpenGL
-    auto* glView = new GLRenderer(m_grid, this);
-    // Ustawiamy mapView na null, aby uniknąć błędów przy klikaniu przycisków
+    // Przełączamy się na renderer OpenGL
+    // Tymczasowo wracamy do MapView, aby stworzyć mapę
     mapView = nullptr;
+    glRenderer = new GLRenderer(m_grid, this);
     QWidget *right = setupRightPanel();
 
     // szerokości paneli jak na makiecie
@@ -41,7 +41,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     // dodanie do układu
     mainLayout->addWidget(left);
-    mainLayout->addWidget(glView, 1); // mapa zajmuje resztę
+    mainLayout->addWidget(glRenderer, 1); // mapa zajmuje resztę
     mainLayout->addWidget(right);
 }
 
@@ -52,7 +52,6 @@ void MainWindow::setupMenuBar() {
     QAction *openAct  = file->addAction("Otwórz");
     QAction *saveAct  = file->addAction("Zapisz");
 
-    // 🔵 NOWY — otwieranie plików
     connect(openAct, &QAction::triggered, this, [this]() {
         QString path = QFileDialog::getOpenFileName(
             this, "Wczytaj mapę", "", "Mapa (*.map)"
@@ -60,8 +59,8 @@ void MainWindow::setupMenuBar() {
 
         if (!path.isEmpty()) {
             m_grid->loadFromFile(path);
-            // Nie trzeba odświeżać, bo GLRenderer robi to w każdej klatce
-            // if (mapView) mapView->update();
+            if (mapView) mapView->update(); // Dla widoku 2D
+            if (glRenderer) glRenderer->update(); // Dla widoku 3D
         }
     });
 
@@ -74,10 +73,10 @@ void MainWindow::setupMenuBar() {
             m_grid->saveToFile(path);
     });
 
-    // (opcjonalnie) NOWY — nowa mapa
     connect(newAct, &QAction::triggered, this, [this]() {
         m_grid->clear();
-        // if (mapView) mapView->update();
+        if (mapView) mapView->update(); // Dla widoku 2D
+        if (glRenderer) glRenderer->update(); // Dla widoku 3D
     });
 }
 
@@ -117,15 +116,15 @@ QWidget* MainWindow::setupLeftPanel() {
 
     v->addStretch();
 
-    // Tymczasowo wyłączamy połączenia, ponieważ mapView jest nieaktywny
-    // connect(btnTerrain,  &QPushButton::clicked, [this](){ if(mapView) mapView->setTool(MapView::Tool::Terrain); });
-    // connect(btnObstacle, &QPushButton::clicked, [this](){ if(mapView) mapView->setTool(MapView::Tool::Obstacle); });
-    // connect(btnRiver,    &QPushButton::clicked, [this](){ if(mapView) mapView->setTool(MapView::Tool::River); });
-    // connect(btnRain,     &QPushButton::clicked, [this](){ if(mapView) mapView->setTool(MapView::Tool::WaterSource); });
-    // connect(btnEraser,   &QPushButton::clicked, [this](){ if(mapView) mapView->setTool(MapView::Tool::Eraser); });
+    // Przywracamy połączenia, aby edytor 2D działał poprawnie
+    connect(btnTerrain,  &QPushButton::clicked, [this](){ if(mapView) mapView->setTool(MapView::Tool::Terrain); });
+    connect(btnObstacle, &QPushButton::clicked, [this](){ if(mapView) mapView->setTool(MapView::Tool::Obstacle); });
+    connect(btnRiver,    &QPushButton::clicked, [this](){ if(mapView) mapView->setTool(MapView::Tool::River); });
+    connect(btnRain,     &QPushButton::clicked, [this](){ if(mapView) mapView->setTool(MapView::Tool::WaterSource); });
+    connect(btnEraser,   &QPushButton::clicked, [this](){ if(mapView) mapView->setTool(MapView::Tool::Eraser); });
 
     // --- NOWY KOD: Podłączenie sygnału zmiany rozmiaru pędzla ---
-    // connect(brushSizeSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), [this](int value){ if(mapView) mapView->setBrushSize(value); });
+    connect(brushSizeSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), [this](int value){ if(mapView) mapView->setBrushSize(value); });
 
     return panel;
 }
