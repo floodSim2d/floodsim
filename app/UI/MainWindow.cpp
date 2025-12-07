@@ -1,18 +1,18 @@
 #include "MainWindow.h"
 
 #include <QAction>
-#include <QGroupBox>
 #include <QFileDialog>
+#include <QGroupBox>
 #include <QLabel>
 #include <QMenuBar>
+#include <QPushButton>
 #include <QSpinBox>
 #include <QStatusBar>
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QWidget>
-#include <QPushButton>
 
-#include "../Simulation/Grid.h"
+#include "../Simulation/Grid/Grid.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), renderer(nullptr), heightLabel(nullptr)
@@ -24,10 +24,10 @@ MainWindow::MainWindow(QWidget *parent)
     setupToolBar();
     setupStatusBar();
 
-    QWidget *central = new QWidget(this);
+    auto *central = new QWidget(this);
     setCentralWidget(central);
 
-    QHBoxLayout *mainLayout = new QHBoxLayout(central);
+    auto *mainLayout = new QHBoxLayout(central);
 
     QWidget *left  = setupLeftPanel();
     QWidget *right = setupRightPanel();
@@ -66,8 +66,16 @@ void MainWindow::setupMenuBar() {
             this, "Wczytaj mapę", "", "Mapa (*.map)"
         );
 
-        if (!path.isEmpty())
+        if (!path.isEmpty()) {
+            auto const widthBefore = renderer->getGrid()->getWidth();
+            auto const heightBefore = renderer->getGrid()->getHeight();
+
             renderer->getGrid()->loadHeightmap(path);
+            // reset camera if grid size changed
+            if (renderer->getGrid()->getWidth() != widthBefore || renderer->getGrid()->getHeight() != heightBefore) {
+                renderer->resetCamera();
+            }
+        }
     });
 
     // zapisywanie plików
@@ -76,8 +84,9 @@ void MainWindow::setupMenuBar() {
             this, "Zapisz mapę", "", "Mapa (*.map)"
         );
 
-        if (!path.isEmpty())
+        if (!path.isEmpty()) {
             renderer->getGrid()->saveHeightmap(path);
+        }
     });
 
     // nowa mapa
@@ -87,23 +96,42 @@ void MainWindow::setupMenuBar() {
 }
 
 void MainWindow::setupToolBar() {
-    QToolBar *tb = addToolBar("Toolbar");
-    QAction* playAction = tb->addAction("▶ Start");
-    QAction* pauseAction = tb->addAction("⏸ Stop");
-    QAction* stepAction = tb->addAction("⏭ Krok");
-    tb->addSeparator();
-    QAction* resetAction = tb->addAction("Reset");
+    QToolBar *toolbar = addToolBar("Toolbar");
+    QAction* playAction = toolbar->addAction("▶ Start");
+    QAction* pauseAction = toolbar->addAction("⏸ Stop");
+    QAction* stepAction = toolbar->addAction("⏭ Krok");
+    toolbar->addSeparator();
+    QAction* resetAction = toolbar->addAction("Reset");
 
     // Create height info label in toolbar
-    tb->addSeparator();
+    toolbar->addSeparator();
     heightLabel = new QLabel("Wysokość: ---", this);
     heightLabel->setStyleSheet("QLabel { padding: 5px; background-color: rgba(0, 0, 0, 0.1); border-radius: 3px; }");
     heightLabel->setMinimumWidth(200);
-    tb->addWidget(heightLabel);
+    toolbar->addWidget(heightLabel);
 
     // event listeners
-    connect(renderer, &OpenGLRenderer::heightValueHovered, this, [this](int gridX, int gridY, float height) {
-        heightLabel->setText(QString("Pozycja: (%1, %2) | Wysokość: %3").arg(gridX).arg(gridY).arg(height, 0, 'f', 2));
+    connect(renderer, &OpenGLRenderer::cellHovered , this, [this](int gridX, int gridY, const Cell& cell) {
+        QString label = QString("Wysokość terenu: %1").arg(cell.getTerrainHeight(), 0, 'f', 2);
+        if (cell.getWaterDepth() > 0.0f) {
+            label += QString(" | Głębokość wody: %1").arg(cell.getWaterDepth(), 0, 'f', 2);
+            label += QString(" | Całkowita wysokość: %1").arg(cell.getTotalHeight(), 0, 'f', 2);
+        }
+
+        // Additional flags
+        if (cell.isObstacle()) {
+            label += QString(" | Przeszkoda");
+        }
+        if (cell.isRiver()) {
+            label += QString(" | Rzeka");
+        }
+        if (cell.isWaterSource()) {
+            label += QString(" | Źródło wody");
+        }
+        if (cell.getWaterDepth() > cell.getRiverCapacity()) {
+            label += QString(" | Przelew wody!");
+        }
+        heightLabel->setText(QString("Pozycja: (%1, %2) | %3").arg(gridX).arg(gridY).arg(label));
     });
 
     connect(resetAction, &QAction::triggered, this, [this]() {
@@ -128,8 +156,8 @@ void MainWindow::setupStatusBar() {
 }
 
 QWidget* MainWindow::setupLeftPanel() {
-    auto panel = new QWidget(this);
-    auto v = new QVBoxLayout(panel);
+    auto *panel = new QWidget(this);
+    auto *v = new QVBoxLayout(panel);
 
     auto *btnTerrain   = new QPushButton("Teren");
     auto *btnObstacle  = new QPushButton("Przeszkoda");
@@ -164,7 +192,7 @@ QWidget* MainWindow::setupRightPanel() {
     auto *grp = new QGroupBox("Parametry", panel);
     auto *g = new QVBoxLayout(grp);
 
-    const auto spinK = new QDoubleSpinBox();
+    auto *const spinK = new QDoubleSpinBox();
     spinK->setRange(0, 100);
     spinK->setValue(1);
 
@@ -177,7 +205,7 @@ QWidget* MainWindow::setupRightPanel() {
     g->addWidget(new QLabel("Max głębokość:"));
     g->addWidget(spinDepth);
 
-    const auto apply = new QPushButton("Zastosuj");
+    auto *const apply = new QPushButton("Zastosuj");
     g->addWidget(apply);
 
     v->addWidget(grp);
@@ -185,5 +213,3 @@ QWidget* MainWindow::setupRightPanel() {
 
     return panel;
 }
-
-

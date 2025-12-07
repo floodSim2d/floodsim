@@ -1,16 +1,15 @@
 #include "OpenGLRenderer.h"
 
-#include <QMouseEvent>
 #include <QWheelEvent>
 #include <cmath>
 
-#include "../Simulation/Grid.h"
+#include "../Simulation/Grid/Grid.h"
 
 OpenGLRenderer::OpenGLRenderer(QWidget* parent)
     : QOpenGLWidget(parent),
       grid(nullptr),
-      cameraZoom(50.0f),
-      cameraPosition(0.0f, 0.0f, 50.0f),
+      cameraZoom(200.0f),
+      cameraPosition(0.0f, 0.0f, 100.0f),
       cameraTarget(0.0f, 0.0f, 0.0f),
       isDragging(false),
       hoveredGridX(-1),
@@ -34,43 +33,44 @@ OpenGLRenderer::~OpenGLRenderer() {
 void OpenGLRenderer::initializeGL() {
     initializeOpenGLFunctions();
 
-    glClearColor(0.15f, 0.15f, 0.15f, 1.0f);
+    glClearColor(0.15F, 0.15F, 0.15F, 1.0F);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    grid = std::make_unique<Grid>(100, 100, 1.0f);
+    qDebug() << "OpenGL Renderer initialized.";
+    qDebug() << "Vendor:" << reinterpret_cast<const char*>(glGetString(GL_VENDOR));
+    qDebug() << "Renderer:" << reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+    qDebug() << "Version:" << reinterpret_cast<const char*>(glGetString(GL_VERSION));
+
+    grid = std::make_unique<Grid>(0, 0, 1.0F);
     grid->initialize(this);
 
-    // test heightmap data
-    for (int y = 0; y < grid->getHeight(); ++y) {
-        for (int x = 0; x < grid->getWidth(); ++x) {
-            float fx = static_cast<float>(x) / grid->getWidth();
-            float fy = static_cast<float>(y) / grid->getHeight();
+    // Center camera on grid
+    const float gridCenterX = static_cast<float>(grid->getWidth()) * grid->getCellSize() * 0.5F;
+    const float gridCenterY = static_cast<float>(grid->getHeight()) * grid->getCellSize() * 0.5F;
+    cameraPosition = QVector3D(gridCenterX, gridCenterY, 100.0F);
+    cameraTarget = QVector3D(gridCenterX, gridCenterY, 0.0F);
 
-            // hills using sine waves
-            float height = 5.0f + 3.0f * std::sin(fx * 6.28f) * std::cos(fy * 6.28f);
-            height += 1.0f * std::sin(fx * 12.56f + fy * 12.56f);
-
-            grid->setHeightValue(x, y, height);
-        }
-    }
-
-    grid->updateHeightTexture();
+    // Set initial zoom to show entire grid (use the larger dimension)
+    const float gridWorldWidth = static_cast<float>(grid->getWidth()) * grid->getCellSize();
+    const float gridWorldHeight = static_cast<float>(grid->getHeight()) * grid->getCellSize();
+    cameraZoom = std::max(gridWorldWidth, gridWorldHeight) * 0.6F;
+    cameraZoom = std::max(10.0F, std::min(200.0F, cameraZoom));
 
     setupCamera();
 }
 
-void OpenGLRenderer::resizeGL(int width, int height) {
+void OpenGLRenderer::resizeGL(const int width, const int height) {
     glViewport(0, 0, width, height);
-
-    float aspect = static_cast<float>(width) / static_cast<float>(height);
-    projectionMatrix.setToIdentity();
-    projectionMatrix.perspective(45.0f, aspect, 0.1f, 1000.0f);
+    updateProjectionMatrix();
 }
 
 void OpenGLRenderer::paintGL() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // uncomment for testing wireframe mode
+    // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     if (grid) {
         grid->render(projectionMatrix, viewMatrix);
@@ -82,22 +82,31 @@ void OpenGLRenderer::setupCamera() {
     viewMatrix.lookAt(cameraPosition, cameraTarget, QVector3D(0.0f, 1.0f, 0.0f));
 }
 
-void OpenGLRenderer::setZoom(float zoom) {
+void OpenGLRenderer::updateProjectionMatrix() {
+    const float aspect = static_cast<float>(width()) / static_cast<float>(height());
+    projectionMatrix.setToIdentity();
+    const float orthoSize = cameraZoom;
+    if (aspect > 1.0f) {
+        projectionMatrix.ortho(-orthoSize * aspect, orthoSize * aspect,
+                              -orthoSize, orthoSize,
+                              0.1f, 1000.0f);
+    } else {
+        projectionMatrix.ortho(-orthoSize, orthoSize,
+                              -orthoSize / aspect, orthoSize / aspect,
+                              0.1f, 1000.0f);
+    }
+}
+
+
+void OpenGLRenderer::setZoom(const float zoom) {
     cameraZoom = std::max(10.0f, std::min(200.0f, zoom));
 
-    // Update camera position based on zoom
-    float gridCenterX = grid->getWidth() * grid->getCellSize() * 0.5f;
-    float gridCenterY = grid->getHeight() * grid->getCellSize() * 0.5f;
-
-    cameraPosition = QVector3D(gridCenterX, gridCenterY, cameraZoom);
-    cameraTarget = QVector3D(gridCenterX, gridCenterY, 0.0f);
-
-    setupCamera();
+    updateProjectionMatrix();
     update();
 }
 
 void OpenGLRenderer::panCamera(float deltaX, float deltaY) {
-    float sensitivity = cameraZoom * 0.01f;
+    const float sensitivity = cameraZoom * 0.01f;
 
     cameraPosition.setX(cameraPosition.x() + deltaX * sensitivity);
     cameraPosition.setY(cameraPosition.y() - deltaY * sensitivity);
@@ -109,14 +118,24 @@ void OpenGLRenderer::panCamera(float deltaX, float deltaY) {
 }
 
 void OpenGLRenderer::resetCamera() {
-    cameraZoom = 50.0f;
+    if (!grid) {
+        return;
+    }
 
     float gridCenterX = grid->getWidth() * grid->getCellSize() * 0.5f;
     float gridCenterY = grid->getHeight() * grid->getCellSize() * 0.5f;
 
-    cameraPosition = QVector3D(gridCenterX, gridCenterY, cameraZoom);
+    cameraPosition = QVector3D(gridCenterX, gridCenterY, 100.0f);
     cameraTarget = QVector3D(gridCenterX, gridCenterY, 0.0f);
 
+    // Calculate zoom to show entire grid (use the larger dimension)
+    const float gridWorldWidth = grid->getWidth() * grid->getCellSize();
+    const float gridWorldHeight = grid->getHeight() * grid->getCellSize();
+    cameraZoom = std::max(gridWorldWidth, gridWorldHeight) * 0.6f;
+    // Clamp to valid zoom range
+    cameraZoom = std::max(10.0f, std::min(200.0f, cameraZoom));
+
+    updateProjectionMatrix();
     setupCamera();
     update();
 }
@@ -136,22 +155,25 @@ void OpenGLRenderer::mousePressEvent(QMouseEvent* event) {
 }
 
 void OpenGLRenderer::mouseMoveEvent(QMouseEvent* event) {
-    // Handle camera panning
+    // Handle camera moving while mouse dragging
     if (isDragging && (event->buttons() & Qt::LeftButton)) {
-        QPoint delta = event->pos() - lastMousePos;
+        const QPoint delta = event->pos() - lastMousePos;
         panCamera(static_cast<float>(delta.x()), static_cast<float>(delta.y()));
         lastMousePos = event->pos();
     }
 
-    // Handle hover - show height value
-    int gridX, gridY;
+    // Handle hover - show cell label
+    int gridX;
+    int gridY;
     if (screenToGridCoords(event->pos().x(), event->pos().y(), gridX, gridY)) {
         if (gridX != hoveredGridX || gridY != hoveredGridY) {
             hoveredGridX = gridX;
             hoveredGridY = gridY;
 
-            float height = grid->getHeightValue(gridX, gridY);
-            emit heightValueHovered(gridX, gridY, height);
+            const auto* cell = grid->getCell(gridX, gridY);
+            if (cell != nullptr) {
+                emit cellHovered(gridX, gridY, *cell);
+            }
         }
     } else {
         hoveredGridX = -1;
@@ -162,46 +184,45 @@ void OpenGLRenderer::mouseMoveEvent(QMouseEvent* event) {
 }
 
 void OpenGLRenderer::wheelEvent(QWheelEvent* event) {
-    float delta = event->angleDelta().y() / 120.0f;
-    float zoomFactor = 1.0f + delta * 0.1f;
+    const float delta = event->angleDelta().y() / 120.0F;
+    const float zoomFactor = 1.0F + (delta * 0.1F);
     setZoom(cameraZoom / zoomFactor);
 
     event->accept();
 }
 
-bool OpenGLRenderer::screenToGridCoords(int screenX, int screenY, int& gridX, int& gridY) const {
-    if (!grid) return false;
+bool OpenGLRenderer::screenToGridCoords(const int screenX, const int screenY, int& gridX, int& gridY) const {
+    if (!grid) { return
+        false;
+    }
 
-    // Convert screen coordinates to OpenGL normalized device coordinates
-    float x = (2.0f * screenX) / width() - 1.0f;
-    float y = 1.0f - (2.0f * screenY) / height();
+    // Convert screen coordinates to normalized device coordinates
+    const float ndcX = (2.0f * screenX) / width() - 1.0f;
+    const float ndcY = 1.0f - (2.0f * screenY) / height();
 
-    // Create matrices for unprojection
-    QMatrix4x4 invView = viewMatrix.inverted();
-    QMatrix4x4 invProj = projectionMatrix.inverted();
+    // For orthographic projection, unproject directly to world space at z=0 plane
+    // The matrices are applied in order: projection * view * modelPos
+    // So to reverse: invView * invProj * ndcPos
+    const QMatrix4x4 invProj = projectionMatrix.inverted();
+    const QMatrix4x4 invView = viewMatrix.inverted();
 
-    // Transform to view space
-    QVector4D rayClip(x, y, -1.0f, 1.0f);
-    QVector4D rayEye = invProj * rayClip;
-    rayEye = QVector4D(rayEye.x(), rayEye.y(), -1.0f, 0.0f);
+    // Start with NDC position at z=0 (ground plane in view space after projection)
+    QVector4D viewPos = invProj * QVector4D(ndcX, ndcY, 0.0F, 1.0F);
 
-    // Transform to world space
-    QVector4D rayWorldTemp = invView * rayEye;
-    QVector3D rayWorld(rayWorldTemp.x(), rayWorldTemp.y(), rayWorldTemp.z());
-    rayWorld.normalize();
+    // For orthographic projection, w should be 1, but let's be safe
+    if (viewPos.w() != 0.0f) {
+        viewPos /= viewPos.w();
+    }
 
-    // Ray-plane intersection (ground plane at z=0)
-    QVector3D rayOrigin = cameraPosition;
-    float t = -rayOrigin.z() / rayWorld.z();
-
-    if (t < 0) return false;  // Ray pointing away from ground
-
-    QVector3D intersectionPoint = rayOrigin + rayWorld * t;
+    // Now transform from view space to world space
+    // We want the point at z=0 in world space, so we need to find where the ray intersects z=0
+    // For orthographic, the ray direction is always along the view direction
+    QVector4D worldPos = invView * viewPos;
 
     // Convert world coordinates to grid coordinates
-    float cellSize = grid->getCellSize();
-    gridX = static_cast<int>(intersectionPoint.x() / cellSize);
-    gridY = static_cast<int>(intersectionPoint.y() / cellSize);
+    const float cellSize = grid->getCellSize();
+    gridX = static_cast<int>(worldPos.x() / cellSize);
+    gridY = static_cast<int>(worldPos.y() / cellSize);
 
     return grid->isValidPosition(gridX, gridY);
 }

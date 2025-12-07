@@ -1,11 +1,13 @@
 add_executable(floodsim
-    main.cpp
-    UI/MainWindow.h
-    UI/MainWindow.cpp
-    Simulation/Grid.cpp
-    Simulation/Grid.h
-    Renderer/OpenGLRenderer.h
-    Renderer/OpenGLRenderer.cpp
+        main.cpp
+        UI/MainWindow.h
+        UI/MainWindow.cpp
+        Simulation/Grid/Grid.cpp
+        Simulation/Grid/Grid.h
+        Renderer/OpenGLRenderer.h
+        Renderer/OpenGLRenderer.cpp
+        Simulation/Grid/Cell.cpp
+        Simulation/Grid/Cell.h
 )
 
 target_link_libraries(floodsim PRIVATE
@@ -26,6 +28,6 @@ set_target_properties(floodsim PROPERTIES
 qt_add_resources(floodsim "shaders"
         PREFIX "/"
         FILES
-            "Simulation/shaders/grid_vertex.glsl"
-            "Simulation/shaders/grid_fragment.glsl"
+            "Simulation/Grid/shaders/grid.vert"
+            "Simulation/Grid/shaders/grid.frag"
 )

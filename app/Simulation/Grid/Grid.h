@@ -3,8 +3,6 @@
 
 #include <qopenglfunctions_3_3_core.h>
 
-#include <QFile>
-#include <QMatrix4x4>
 #include <QOpenGLBuffer>
 #include <QOpenGLShaderProgram>
 #include <QOpenGLTexture>
@@ -12,17 +10,19 @@
 #include <QVector2D>
 #include <vector>
 
+#include "Cell.h"
+
 class Grid {
    public:
     Grid(int width, int height, float cellSize);
     ~Grid();
 
     void initialize(QOpenGLFunctions_3_3_Core* glContext);
-    void render(const QMatrix4x4 projection, const QMatrix4x4 view);
+    void render(const QMatrix4x4& projection, const QMatrix4x4& view) const;
 
     // getters setters
-    float getHeightValue(int x, int y) const;
-    void setHeightValue(int x, int y, float height);
+    Cell* getCell(int x, int y);
+    void setCell(int x, int y, const Cell& value);
 
     auto getWidth() const { return width; }
     auto getHeight() const { return height; }
@@ -30,8 +30,8 @@ class Grid {
 
     void saveHeightmap(const QString& filename) const;
     void loadHeightmap(const QString& filename);
-    void clearHeightmap(float value = 0.0f);
-    void updateHeightTexture();
+    void clearHeightmap(const Cell& defaultCell = Cell());
+    void updateHeightTexture() const;
 
     // utils
     bool isValidPosition(int x, int y) const;
@@ -54,7 +54,7 @@ class Grid {
     unsigned int width;
     unsigned int height;
     float cellSize;
-    std::vector<float> heightMap;
+    std::vector<Cell> heightMap;
 
     // rendering data
     unsigned int indexCount;

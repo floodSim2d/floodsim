@@ -1,21 +1,27 @@
 #include "Grid.h"
 
-Grid::Grid(int width, int height, float cellSize)
+#include <QFile>
+
+Grid::Grid(const int width, const int height, const float cellSize)
     : glContext(nullptr),
       shaderProgram(nullptr),
       vertexBuffer(nullptr),
       indexBuffer(nullptr),
       VAO(nullptr),
       heightTexture(nullptr),
-      indexCount(0),
-      meshResolution(200),
       width(width),
       height(height),
-      cellSize(cellSize) {
-    heightMap.resize(width * height, 0.0f);
+      cellSize(cellSize),
+      indexCount(0),
+      meshResolution(200) { // TODO: replace with parameter or something that isnt magic number
+    heightMap.resize(width * height, Cell());
 }
 
 Grid::~Grid() {
+    VAO->destroy();
+    indexBuffer->destroy();
+    vertexBuffer->destroy();
+
     delete shaderProgram;
     delete vertexBuffer;
     delete indexBuffer;
@@ -29,13 +35,71 @@ void Grid::initialize(QOpenGLFunctions_3_3_Core* gl_context) {
     createShaders();
     createMesh();
     createHeightTexture();
+
+    // Create realistic terrain with land, water, hills, and valleys
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            const float nx = static_cast<float>(x) / static_cast<float>(width);
+            const float ny = static_cast<float>(y) / static_cast<float>(height);
+
+            // Base terrain - rolling hills using multiple sine waves
+            float terrain = 3.0F + 2.0F * std::sin(nx * 3.14159F * 3.0F) * std::cos(ny * 3.14159F * 2.0F);
+            terrain += 1.5F * std::sin(nx * 6.28F * 2.0F + ny * 6.28F * 1.5F);
+
+            // Add some mountains in the upper-left quadrant
+            if (nx < 0.4F && ny < 0.4F) {
+                const float distFromCorner = std::sqrt(nx * nx + ny * ny);
+                terrain += 4.0F * std::exp(-distFromCorner * 5.0F);
+            }
+
+            // Create a valley/river channel running diagonally
+            const float riverDist = std::abs((nx - ny) * std::sqrt(2.0F));
+            if (riverDist < 0.15F) {
+                // River valley - lower terrain
+                terrain -= 3.0F * (1.0F - riverDist / 0.15F);
+                terrain = std::max(0.5F, terrain);
+            }
+
+            // Create a lake in the lower-right area
+            const float lakeCenterX = 0.7F;
+            const float lakeCenterY = 0.7F;
+            const float distFromLake = std::sqrt((nx - lakeCenterX) * (nx - lakeCenterX) +
+                                                  (ny - lakeCenterY) * (ny - lakeCenterY));
+            if (distFromLake < 0.2F) {
+                // Lake depression
+                terrain -= 2.5F * (1.0F - distFromLake / 0.2F);
+                terrain = std::max(0.3F, terrain);
+            }
+
+            // Ensure terrain is not negative
+            terrain = std::max(0.0F, terrain);
+
+            // Add water based on terrain height
+            float waterDepth = 0.0F;
+
+            // River water
+            if (riverDist < 0.08F && terrain < 2.5F) {
+                waterDepth = 1.5F - (terrain - 0.5F) * 0.5F;
+                waterDepth = std::max(0.0F, std::min(2.0F, waterDepth));
+            }
+
+            // Lake water - deeper in center
+            if (distFromLake < 0.15F) {
+                waterDepth = 3.0F * (1.0F - distFromLake / 0.15F);
+                waterDepth = std::max(0.0F, std::min(3.5F, waterDepth));
+            }
+
+            setCell(x, y, Cell{terrain, waterDepth,  false, (riverDist < 0.15F), false, 5.0F});
+        }
+    }
+    updateHeightTexture();
 }
 
 void Grid::createShaders() {
     shaderProgram = new QOpenGLShaderProgram();
 
-    shaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, ":/Simulation/shaders/grid_vertex.glsl");
-    shaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, ":/Simulation/shaders/grid_fragment.glsl");
+    shaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, ":/Simulation/Grid/shaders/grid.vert");
+    shaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, ":/Simulation/Grid/shaders/grid.frag");
     shaderProgram->link();
     if (!shaderProgram->isLinked()) {
         qDebug() << "Shader Program linking failed" << shaderProgram->log();
@@ -55,7 +119,7 @@ void Grid::createMesh() {
             vertices.push_back(posX);
             vertices.push_back(posY);
 
-            // tex coords, posZ is 0
+            // tex coords
             vertices.push_back(posX);
             vertices.push_back(posY);
         }
@@ -76,10 +140,10 @@ void Grid::createMesh() {
              * bottomLeft = 1 * 3 + 0 = 3
              * bottomRight = 1 * 3 + 1 = 4
              */
-            int topLeft = y * (meshResolution + 1) + x;
-            int topRight = topLeft + 1;
-            int bottomLeft = (y + 1) * (meshResolution + 1) + x;
-            int bottomRight = bottomLeft + 1;
+            const int topLeft = y * (meshResolution + 1) + x;
+            const int topRight = topLeft + 1;
+            const int bottomLeft = (y + 1) * (meshResolution + 1) + x;
+            const int bottomRight = bottomLeft + 1;
 
             indices.push_back(topLeft);
             indices.push_back(bottomLeft);
@@ -124,23 +188,34 @@ void Grid::createHeightTexture() {
     heightTexture->allocateStorage();
 
     heightTexture->setMinificationFilter(QOpenGLTexture::LinearMipMapLinear);
-    heightTexture->setMagnificationFilter(QOpenGLTexture::Linear);
+    heightTexture->setMagnificationFilter(QOpenGLTexture::Nearest);
     heightTexture->setWrapMode(QOpenGLTexture::WrapMode::ClampToEdge);
 
     updateHeightTexture();
 }
 
-void Grid::updateHeightTexture() {
+void Grid::updateHeightTexture() const {
     if (heightTexture == nullptr) {
         qDebug() << "heightTexture is null";
         return;
     }
+
+    // Extract height values from Cell objects into a flat array
+    // Format: RGB32F where R = terrain height, G = water depth, B = total height
+    // TODO: if possible optimize to avoid allocation each time
+    std::vector<float> textureData(width * height * 3);
+    for (unsigned int i = 0; i < heightMap.size(); i++) {
+        textureData[i * 3 + 0] = heightMap[i].isObstacle() ? 1.0F : 0.0F;
+        textureData[i * 3 + 1] = heightMap[i].getTerrainHeight();
+        textureData[i * 3 + 2] = heightMap[i].getWaterDepth();
+    }
+
     heightTexture->bind();
-    glContext->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGB, GL_FLOAT, heightMap.data());
+    glContext->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGB, GL_FLOAT, textureData.data());
     heightTexture->generateMipMaps();
 }
 
-void Grid::render(const QMatrix4x4 projection, const QMatrix4x4 view) {
+void Grid::render(const QMatrix4x4& projection, const QMatrix4x4& view) const {
     if (shaderProgram == nullptr) {
         qDebug() << "Shader Program not created, cannot render grid.";
         return;
@@ -154,29 +229,31 @@ void Grid::render(const QMatrix4x4 projection, const QMatrix4x4 view) {
     shaderProgram->setUniformValue("projection", projection);
     shaderProgram->setUniformValue("heightMap", 0);
     shaderProgram->setUniformValue("gridSize", QVector2D(width, height));
-    shaderProgram->setUniformValue("heightScale", 1.0F);
+    shaderProgram->setUniformValue("cellSize", cellSize);
 
     VAO->bind();
-    glContext->glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, 0);
+    glContext->glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, nullptr);
     VAO->release();
 
     shaderProgram->release();
 }
 
-bool Grid::isValidPosition(int x, int y) const { return x >= 0 && x < width && y >= 0 && y < height; }
+auto Grid::isValidPosition(int x, int y) const -> bool { return x >= 0 && x < width && y >= 0 && y < height; }
 
-float Grid::getHeightValue(int x, int y) const {
-    if (!isValidPosition(x, y)) return 0.0f;
+auto Grid::getCell(int x, int y) -> Cell*{
+    if (!isValidPosition(x, y)) {
+        return nullptr;
+    }
 
-    return heightMap[y * width + x];
+    return &heightMap[y * width + x];
 }
 
-void Grid::setHeightValue(int x, int y, float height) {
+void Grid::setCell(const int x, const int y, const Cell& value) {
     if (!isValidPosition(x, y)) {
         return;
     }
 
-    heightMap[y * width + x] = height;
+    heightMap[y * width + x] = value;
 }
 
 auto Grid::worldPosToGrid(const QVector2D& worldPos) const -> QVector2D {
@@ -188,6 +265,10 @@ auto Grid::worldPosToGrid(const QVector2D& worldPos) const -> QVector2D {
 
 void Grid::saveHeightmap(const QString& filename) const {
     QFile file(filename);
+    // add extension
+    if (!filename.endsWith(".map")) {
+        file.setFileName(filename + ".map");
+    }
     if (!file.open(QIODevice::WriteOnly)) {
         qDebug() << "Could not open file for writing:" << filename;
         return;
@@ -196,8 +277,8 @@ void Grid::saveHeightmap(const QString& filename) const {
     QDataStream stream(&file);
     stream << width << height;
 
-    for (float heightVal : heightMap) {
-        stream << heightVal;
+    for (Cell cell : heightMap) {
+        stream << cell;
     }
 
     file.close();
@@ -211,7 +292,8 @@ void Grid::loadHeightmap(const QString& filename) {
     }
 
     QDataStream stream(&file);
-    int file_width, file_height;
+    int file_width;
+    int file_height;
     stream >> file_width >> file_height;
     const bool needResize = file_width != width || file_height != height;
     if (needResize) {
@@ -222,8 +304,8 @@ void Grid::loadHeightmap(const QString& filename) {
         heightTexture = nullptr;
     }
 
-    for (int i = 0; i < heightMap.size(); i++) {
-        stream >> heightMap[i];
+    for (auto &cell : heightMap) {
+        stream >> cell;
     }
 
     if (needResize) {
@@ -234,7 +316,7 @@ void Grid::loadHeightmap(const QString& filename) {
     file.close();
 }
 
-void Grid::clearHeightmap(float value) {
-    std::fill(heightMap.begin(), heightMap.end(), value);
+void Grid::clearHeightmap(const Cell& defaultCell) {
+    std::ranges::fill(heightMap, defaultCell);
     updateHeightTexture();
 }

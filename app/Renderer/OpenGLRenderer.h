@@ -7,7 +7,9 @@
 #include <QTimer>
 #include <QVector3D>
 #include <memory>
+#include <QString>
 
+class Cell;
 class Grid;
 
 class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions_3_3_Core {
@@ -18,7 +20,7 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions_3_3_Core
     ~OpenGLRenderer() override;
 
     // Grid access
-    [[nodiscard]] Grid* getGrid() const { return grid.get(); }
+    Grid* getGrid() const { return grid.get(); }
 
     // Camera control
     void setZoom(float zoom);
@@ -26,7 +28,7 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions_3_3_Core
     void resetCamera();
 
    signals:
-    void heightValueHovered(int gridX, int gridY, float height);
+    void cellHovered(int gridX, int gridY, const Cell& cell);
     void cellClicked(int gridX, int gridY);
 
    protected:
@@ -40,6 +42,7 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions_3_3_Core
 
    private:
     void setupCamera();
+    void updateProjectionMatrix();
     bool screenToGridCoords(int screenX, int screenY, int& gridX, int& gridY) const;
 
     // Grid
