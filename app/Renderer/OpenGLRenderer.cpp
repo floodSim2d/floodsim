@@ -6,17 +6,24 @@
 #include "../Simulation/Grid/Grid.h"
 #include "../Simulation/Grid/Cell.h"
 
+constexpr float CAMERA_ZOOM_MAX = 100.0F;
+constexpr float CAMERA_ZOOM_MIN = 10.0F;
+constexpr float CAMERA_MAX_HEIGHT = 1000.0F;
+
 OpenGLRenderer::OpenGLRenderer(QWidget* parent)
     : QOpenGLWidget(parent),
       grid(nullptr),
-      cameraZoom(200.0f),
-      cameraPosition(0.0f, 0.0f, 100.0f),
-      cameraTarget(0.0f, 0.0f, 0.0f),
+      cameraZoom(CAMERA_ZOOM_MAX),
+      cameraPosition(0.0F, 0.0F, CAMERA_MAX_HEIGHT),
+      cameraTarget(0.0F, 0.0F, 0.0F),
       isDragging(false),
       hoveredGridX(-1),
       hoveredGridY(-1),
+      paintTool(new PaintTool(this)),
       cameraPanEnabled(false) {
     setMouseTracking(true);
+
+    connect(paintTool, &PaintTool::paintApplied, this, QOverload<>::of(&QWidget::update));
 }
 
 OpenGLRenderer::~OpenGLRenderer() {
@@ -28,7 +35,7 @@ OpenGLRenderer::~OpenGLRenderer() {
 void OpenGLRenderer::initializeGL() {
     initializeOpenGLFunctions();
 
-    glClearColor(0.15F, 0.15F, 0.15F, 1.0F);
+    glClearColor(0.15F, 0.15F, 0.15F, 1.0F); // Dark gray background
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -44,14 +51,14 @@ void OpenGLRenderer::initializeGL() {
     // Center camera on grid
     const float gridCenterX = static_cast<float>(grid->getWidth()) * grid->getCellSize() * 0.5F;
     const float gridCenterY = static_cast<float>(grid->getHeight()) * grid->getCellSize() * 0.5F;
-    cameraPosition = QVector3D(gridCenterX, gridCenterY, 100.0F);
+    cameraPosition = QVector3D(gridCenterX, gridCenterY, CAMERA_MAX_HEIGHT);
     cameraTarget = QVector3D(gridCenterX, gridCenterY, 0.0F);
 
     // Set initial zoom to show entire grid (use the larger dimension)
     const float gridWorldWidth = static_cast<float>(grid->getWidth()) * grid->getCellSize();
     const float gridWorldHeight = static_cast<float>(grid->getHeight()) * grid->getCellSize();
     cameraZoom = std::max(gridWorldWidth, gridWorldHeight) * 0.6F;
-    cameraZoom = std::max(10.0F, std::min(200.0F, cameraZoom));
+    cameraZoom = std::max(CAMERA_ZOOM_MIN, std::min(CAMERA_ZOOM_MAX, cameraZoom));
 
     setupCamera();
 }
@@ -84,17 +91,17 @@ void OpenGLRenderer::updateProjectionMatrix() {
     if (aspect > 1.0f) {
         projectionMatrix.ortho(-orthoSize * aspect, orthoSize * aspect,
                               -orthoSize, orthoSize,
-                              0.1f, 1000.0f);
+                              0.1F, CAMERA_MAX_HEIGHT);
     } else {
         projectionMatrix.ortho(-orthoSize, orthoSize,
                               -orthoSize / aspect, orthoSize / aspect,
-                              0.1f, 1000.0f);
+                              0.1F, CAMERA_MAX_HEIGHT);
     }
 }
 
 
 void OpenGLRenderer::setZoom(const float zoom) {
-    cameraZoom = std::max(10.0f, std::min(200.0f, zoom));
+    cameraZoom = std::max(CAMERA_ZOOM_MIN, std::min(CAMERA_ZOOM_MAX, zoom));
 
     updateProjectionMatrix();
     update();
@@ -117,39 +124,23 @@ void OpenGLRenderer::setCameraPanEnabled(bool enabled) {
     emit cameraPanToggled(enabled);
 }
 
-void OpenGLRenderer::setToolType(ToolType tool) {
-    paintTool.setToolType(tool);
-}
-
-ToolType OpenGLRenderer::getCurrentToolType() const {
-    return paintTool.getToolType();
-}
-
-void OpenGLRenderer::setBrushSize(int size) {
-    paintTool.setBrushSize(size);
-}
-
-int OpenGLRenderer::getBrushSize() const {
-    return paintTool.getBrushSize();
-}
-
 void OpenGLRenderer::resetCamera() {
     if (!grid) {
         return;
     }
 
-    float gridCenterX = grid->getWidth() * grid->getCellSize() * 0.5f;
-    float gridCenterY = grid->getHeight() * grid->getCellSize() * 0.5f;
+    float gridCenterX = grid->getWidth() * grid->getCellSize() * 0.5F;
+    float gridCenterY = grid->getHeight() * grid->getCellSize() * 0.5F;
 
-    cameraPosition = QVector3D(gridCenterX, gridCenterY, 100.0f);
-    cameraTarget = QVector3D(gridCenterX, gridCenterY, 0.0f);
+    cameraPosition = QVector3D(gridCenterX, gridCenterY, CAMERA_MAX_HEIGHT);
+    cameraTarget = QVector3D(gridCenterX, gridCenterY, 0.0F);
 
     // Calculate zoom to show entire grid (use the larger dimension)
     const float gridWorldWidth = grid->getWidth() * grid->getCellSize();
     const float gridWorldHeight = grid->getHeight() * grid->getCellSize();
-    cameraZoom = std::max(gridWorldWidth, gridWorldHeight) * 0.6f;
-    // Clamp to valid zoom range
-    cameraZoom = std::max(10.0f, std::min(200.0f, cameraZoom));
+    cameraZoom = std::max(gridWorldWidth, gridWorldHeight) * 0.6F;
+
+    cameraZoom = std::max(CAMERA_ZOOM_MIN, std::min(CAMERA_ZOOM_MAX, cameraZoom));
 
     updateProjectionMatrix();
     setupCamera();
@@ -163,10 +154,9 @@ void OpenGLRenderer::mousePressEvent(QMouseEvent* event) {
 
         int gridX, gridY;
         if (screenToGridCoords(event->pos().x(), event->pos().y(), gridX, gridY)) {
-            // If paint tool is active, paint the cell
-            if (paintTool.getToolType() != ToolType::None) {
-                paintTool.applyTool(grid.get(), gridX, gridY);
-                update();
+            // If paint tool is active, start continuous painting
+            if (paintTool->getToolType() != ToolType::Camera) {
+                paintTool->startContinuousPainting(grid.get(), gridX, gridY);
             }
             emit cellClicked(gridX, gridY);
         }
@@ -183,12 +173,11 @@ void OpenGLRenderer::mouseMoveEvent(QMouseEvent* event) {
             const QPoint delta = event->pos() - lastMousePos;
             panCamera(static_cast<float>(delta.x()), static_cast<float>(delta.y()));
             lastMousePos = event->pos();
-        } else if (paintTool.getToolType() != ToolType::None) {
-            // Paint mode - paint on drag
+        } else if (paintTool->getToolType() != ToolType::Camera) {
+            // Paint mode - update current position for continuous painting
             int gridX, gridY;
             if (screenToGridCoords(event->pos().x(), event->pos().y(), gridX, gridY)) {
-                paintTool.applyTool(grid.get(), gridX, gridY);
-                update();
+                paintTool->updatePaintPosition(gridX, gridY);
             }
         }
     }
@@ -214,6 +203,15 @@ void OpenGLRenderer::mouseMoveEvent(QMouseEvent* event) {
     QOpenGLWidget::mouseMoveEvent(event);
 }
 
+void OpenGLRenderer::mouseReleaseEvent(QMouseEvent* event) {
+    if (event->button() == Qt::LeftButton) {
+        isDragging = false;
+        paintTool->stopContinuousPainting();
+    }
+
+    QOpenGLWidget::mouseReleaseEvent(event);
+}
+
 void OpenGLRenderer::wheelEvent(QWheelEvent* event) {
     const float delta = event->angleDelta().y() / 120.0F;
     const float zoomFactor = 1.0F + (delta * 0.1F);
@@ -223,8 +221,8 @@ void OpenGLRenderer::wheelEvent(QWheelEvent* event) {
 }
 
 bool OpenGLRenderer::screenToGridCoords(const int screenX, const int screenY, int& gridX, int& gridY) const {
-    if (!grid) { return
-        false;
+    if (!grid) {
+        return false;
     }
 
     // Convert screen coordinates to normalized device coordinates

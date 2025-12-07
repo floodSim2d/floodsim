@@ -184,7 +184,7 @@ QWidget* MainWindow::setupLeftPanel() {
 
     // Configure tool buttons with their types and messages
     std::vector<ToolButton> toolButtons = {
-        {btnCameraPan, ToolType::None, "Tryb kamery włączony - przeciągnij aby przesunąć widok"},
+        {btnCameraPan, ToolType::Camera, "Tryb kamery włączony - przeciągnij aby przesunąć widok"},
         {btnTerrain, ToolType::Terrain, "Narzędzie: Teren - kliknij aby podnieść teren"},
         {btnObstacle, ToolType::Obstacle, "Narzędzie: Przeszkoda - kliknij aby umieścić przeszkodę"},
         {btnRiver, ToolType::River, "Narzędzie: Rzeka - kliknij aby utworzyć rzekę"},
@@ -222,23 +222,23 @@ QWidget* MainWindow::setupLeftPanel() {
     layout->addStretch();
 
     connect(brushSizeSlider, &QSlider::valueChanged, this, [this, brushSizeValueLabel](int value) {
-        renderer->setBrushSize(value);
+        renderer->getPaintTool()->setBrushSize(value);
         brushSizeValueLabel->setText(QString::number(value));
     });
 
     // Connect all tool buttons with a loop
     for (const auto& toolBtn : toolButtons) {
-        if (toolBtn.type == ToolType::None) {
+        if (toolBtn.type == ToolType::Camera) {
             // Special handling for camera button
             connect(toolBtn.button, &QPushButton::toggled, this, [this, toolButtons, toolBtn](bool checked) {
                 renderer->setCameraPanEnabled(checked);
                 if (checked) {
                     for (const auto& btn : toolButtons) {
-                        if (btn.type != ToolType::None) {
+                        if (btn.type != ToolType::Camera) {
                             btn.button->setChecked(false);
                         }
                     }
-                    renderer->setToolType(ToolType::None);
+                    renderer->getPaintTool()->setToolType(ToolType::Camera);
                     statusBar()->showMessage(toolBtn.message);
                 }
             });
@@ -249,7 +249,7 @@ QWidget* MainWindow::setupLeftPanel() {
                 toolButtons[0].button->setChecked(false);
                 renderer->setCameraPanEnabled(false);
 
-                renderer->setToolType(currentTool.type);
+                renderer->getPaintTool()->setToolType(currentTool.type);
 
                 for (const auto& btn : toolButtons) {
                     btn.button->setChecked(btn.button == currentTool.button);

@@ -4,21 +4,31 @@
 #include "../Grid/Grid.h"
 #include <algorithm>
 
-PaintTool::PaintTool()
-    : currentTool(ToolType::None),
-      brushSize(1) {
+PaintTool::PaintTool(QObject* parent)
+    : QObject(parent),
+      currentTool(ToolType::Camera),
+      brushSize(1),
+      paintTimer(new QTimer(this)),
+      currentGrid(nullptr),
+      currentPaintGridX(-1),
+      currentPaintGridY(-1),
+      isContinuousPainting(false) {
+
+    // Setup paint timer for continuous painting
+    connect(paintTimer, &QTimer::timeout, this, &PaintTool::applyPaintAtCurrentPosition);
+    paintTimer->setInterval(50);  // Apply paint every 50ms (20 times per second)
 }
 
 void PaintTool::setToolType(ToolType type) {
     currentTool = type;
 }
 
-void PaintTool::setBrushSize(int size) {
+void PaintTool::setBrushSize(const int size) {
     brushSize = std::max(1, std::min(10, size));  // Clamp between 1 and 10
 }
 
-void PaintTool::applyTool(Grid* grid, int centerX, int centerY) {
-    if (!grid || currentTool == ToolType::None) {
+void PaintTool::applyTool(Grid* grid, const int centerX, const int centerY) const {
+    if (grid == nullptr || currentTool == ToolType::Camera) {
         return;
     }
 
@@ -29,8 +39,8 @@ void PaintTool::applyTool(Grid* grid, int centerX, int centerY) {
             const int targetY = centerY + dy;
 
             // Check if within circular brush area
-            const float distSquared = static_cast<float>(dx * dx + dy * dy);
-            const float radiusSquared = static_cast<float>(brushSize * brushSize);
+            const auto distSquared = static_cast<float>(dx * dx + dy * dy);
+            const auto radiusSquared = static_cast<float>(brushSize * brushSize);
 
             if (distSquared < radiusSquared) {
                 Cell* cell = grid->getCell(targetX, targetY);
@@ -45,8 +55,8 @@ void PaintTool::applyTool(Grid* grid, int centerX, int centerY) {
     grid->updateHeightTexture();
 }
 
-void PaintTool::applySingleCell(Cell* cell) {
-    if (!cell) {
+void PaintTool::applySingleCell(Cell* cell) const {
+    if (cell == nullptr) {
         return;
     }
 
@@ -62,16 +72,14 @@ void PaintTool::applySingleCell(Cell* cell) {
             break;
 
         case ToolType::River:
-            // Set as river with some water
             cell->setRiver(true);
-            cell->setWaterDepth(1.0F);
-            cell->setTerrainHeight(std::max(0.5F, cell->getTerrainHeight() - 0.5F));
+            cell->setWaterDepth(cell->getWaterDepth() + 0.5F);
             break;
 
         case ToolType::WaterSource:
             // Set as water source
             cell->setWaterSource(true);
-            cell->setWaterDepth(2.0F);
+            cell->setWaterDepth(cell->getWaterDepth()+ 2.0F);
             break;
 
         case ToolType::Eraser:
@@ -79,9 +87,55 @@ void PaintTool::applySingleCell(Cell* cell) {
             *cell = Cell();
             break;
 
-        case ToolType::None:
+        case ToolType::Camera:
             // Do nothing
             break;
+    }
+}
+
+void PaintTool::startContinuousPainting(Grid* grid, int gridX, int gridY) {
+    if (!grid || currentTool == ToolType::Camera) {
+        return;
+    }
+
+    currentGrid = grid;
+    currentPaintGridX = gridX;
+    currentPaintGridY = gridY;
+    isContinuousPainting = true;
+
+    // Apply immediately on start
+    applyTool(grid, gridX, gridY);
+    emit paintApplied();
+
+    // Start timer for continuous painting
+    paintTimer->start();
+}
+
+void PaintTool::updatePaintPosition(int gridX, int gridY) {
+    currentPaintGridX = gridX;
+    currentPaintGridY = gridY;
+
+    // Apply immediately when position updates
+    if (isContinuousPainting && currentGrid) {
+        applyTool(currentGrid, gridX, gridY);
+        emit paintApplied();
+    }
+}
+
+void PaintTool::stopContinuousPainting() {
+    isContinuousPainting = false;
+    paintTimer->stop();
+    currentGrid = nullptr;
+}
+
+void PaintTool::applyPaintAtCurrentPosition() {
+    if (!isContinuousPainting || !currentGrid) {
+        return;
+    }
+
+    if (currentGrid->isValidPosition(currentPaintGridX, currentPaintGridY)) {
+        applyTool(currentGrid, currentPaintGridX, currentPaintGridY);
+        emit paintApplied();
     }
 }
 
