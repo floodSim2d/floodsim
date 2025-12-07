@@ -6,10 +6,6 @@
 #include "../Simulation/Grid/Grid.h"
 #include "../Simulation/Grid/Cell.h"
 
-constexpr float CAMERA_ZOOM_MAX = 100.0F;
-constexpr float CAMERA_ZOOM_MIN = 10.0F;
-constexpr float CAMERA_MAX_HEIGHT = 1000.0F;
-
 OpenGLRenderer::OpenGLRenderer(QWidget* parent)
     : QOpenGLWidget(parent),
       grid(nullptr),
@@ -152,7 +148,8 @@ void OpenGLRenderer::mousePressEvent(QMouseEvent* event) {
         lastMousePos = event->pos();
         isDragging = true;
 
-        int gridX, gridY;
+        int gridX;
+        int gridY;
         if (screenToGridCoords(event->pos().x(), event->pos().y(), gridX, gridY)) {
             // If paint tool is active, start continuous painting
             if (paintTool->getToolType() != ToolType::Camera) {
@@ -167,7 +164,7 @@ void OpenGLRenderer::mousePressEvent(QMouseEvent* event) {
 
 void OpenGLRenderer::mouseMoveEvent(QMouseEvent* event) {
     // Handle dragging with left button
-    if (isDragging && (event->buttons() & Qt::LeftButton)) {
+    if (isDragging && (event->buttons() & Qt::LeftButton) != 0U) {
         if (cameraPanEnabled) {
             // Camera panning mode
             const QPoint delta = event->pos() - lastMousePos;

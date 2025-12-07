@@ -4,6 +4,8 @@
 #include "../Grid/Grid.h"
 #include <algorithm>
 
+#include "../../Renderer/OpenGLRenderer.h"
+
 PaintTool::PaintTool(QObject* parent)
     : QObject(parent),
       currentTool(ToolType::Camera),
@@ -63,7 +65,7 @@ void PaintTool::applySingleCell(Cell* cell) const {
     switch (currentTool) {
         case ToolType::Terrain:
             // Increase terrain height
-            cell->setTerrainHeight(cell->getTerrainHeight() + 0.5F);
+            cell->setTerrainHeight(std::min(cell->getTerrainHeight() + 0.5F, CAMERA_MAX_HEIGHT));
             break;
 
         case ToolType::Obstacle:
@@ -73,13 +75,13 @@ void PaintTool::applySingleCell(Cell* cell) const {
 
         case ToolType::River:
             cell->setRiver(true);
-            cell->setWaterDepth(cell->getWaterDepth() + 0.5F);
+            cell->setWaterDepth(std::min(cell->getWaterDepth() + 0.5F, CAMERA_MAX_HEIGHT));
             break;
 
         case ToolType::WaterSource:
             // Set as water source
             cell->setWaterSource(true);
-            cell->setWaterDepth(cell->getWaterDepth()+ 2.0F);
+            cell->setWaterDepth(std::min(cell->getWaterDepth()+ 2.0F, CAMERA_MAX_HEIGHT));
             break;
 
         case ToolType::Eraser:

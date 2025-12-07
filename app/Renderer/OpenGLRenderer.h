@@ -11,6 +11,10 @@
 
 #include "../Simulation/Tools/PaintTool.h"
 
+constexpr float CAMERA_ZOOM_MAX = 100.0F;
+constexpr float CAMERA_ZOOM_MIN = 10.0F;
+constexpr float CAMERA_MAX_HEIGHT = 1000.0F;
+
 class Cell;
 class Grid;
 

@@ -9,39 +9,57 @@ out vec4 fragColor;
 uniform sampler2D heightMap;
 
 void main() {
-    // Calculate normals using total height for proper shading
-    vec2 texelSize = vec2(1.0) / textureSize(heightMap, 0);
-
-    float hL = texture(heightMap, fragTexCoord - vec2(texelSize.x, 0.0)).b;
-    float hR = texture(heightMap, fragTexCoord + vec2(texelSize.x, 0.0)).b;
-    float hD = texture(heightMap, fragTexCoord - vec2(0.0, texelSize.y)).b;
-    float hU = texture(heightMap, fragTexCoord + vec2(0.0, texelSize.y)).b;
-
-    vec3 normal = normalize(vec3(hL - hR, 2.0, hD - hU));
-
     // Terrain color based on terrain height
-    vec3 terrainLowColor = vec3(0.2, 0.5, 0.2);   // Green - low terrain
-    vec3 terrainMidColor = vec3(0.6, 0.6, 0.4);   // Yellow-brown - mid terrain
-    vec3 terrainHighColor = vec3(0.9, 0.9, 0.9);  // White/gray - high terrain (mountains)
+    vec3 grassColor = vec3(0.2, 0.7, 0.2);         // Bright grass green
+    vec3 darkGrassColor = vec3(0.15, 0.55, 0.15);  // Dark grass green
+    vec3 brownParticle = vec3(0.4, 0.3, 0.2);      // Brown dirt particles
+    vec3 snowParticle = vec3(0.95, 0.95, 1.0);     // White snow particles
+
+    // Add some variation with brown particles using fragment position
+    float brownNoise = fract(sin(dot(fragTexCoord * 1000.0, vec2(12.9898, 78.233))) * 43758.5453);
+    float hasBrownParticle = step(0.85, brownNoise); // 15% chance of brown particle
+
+    // Snow particles - using different noise for variety
+    float snowNoise = fract(sin(dot(fragTexCoord * 800.0, vec2(78.233, 12.9898))) * 43758.5453);
 
     vec3 terrainColor;
     if (terrainHeight < 0.0) {
-        // Below sea level - dark green/brown
-        terrainColor = vec3(0.15, 0.3, 0.15);
-    } else if (terrainHeight < 5.0) {
-        float t = terrainHeight / 5.0;
-        terrainColor = mix(terrainLowColor, terrainMidColor, t);
+        // Below sea level - dark grass/mud
+        terrainColor = vec3(0.2, 0.45, 0.2);
+    } else if (terrainHeight < 15.0) {
+        // Low elevation - lush grass with some brown particles, gets darker with height
+        float darkenFactor = terrainHeight / 15.0;
+        vec3 baseGrass = mix(grassColor, darkGrassColor, darkenFactor * 0.5);
+        terrainColor = mix(baseGrass, brownParticle, hasBrownParticle * 0.5);
+    } else if (terrainHeight < 100.0) {
+        // Mid elevation - darker green grass with more brown particles
+        float t = (terrainHeight - 30.0) / 70.0;
+        vec3 baseGrass = mix(grassColor, vec3(0.15, 0.45, 0.15), t); // Gets darker
+        // More brown particles in mid-range
+        float brownAmount = 0.7 + (hasBrownParticle * 0.3);
+        terrainColor = mix(baseGrass, brownParticle, hasBrownParticle * brownAmount * 0.4);
     } else {
-        float t = clamp((terrainHeight - 5.0) / 10.0, 0.0, 1.0);
-        terrainColor = mix(terrainMidColor, terrainHighColor, t);
+        // High elevation (100+) - dark grass with snow particles
+        vec3 highGrass = vec3(0.1, 0.35, 0.1); // Very dark grass at high elevation
+
+        // Calculate snow particle coverage - increases with height
+        float heightAbove100 = terrainHeight - 100.0;
+        float snowCoverage = clamp(heightAbove100 / 50.0, 0.0, 0.8); // Max 80% snow coverage
+
+        // Snow particles appear more frequently as we go higher
+        float snowThreshold = 1.0 - snowCoverage; // Lower threshold = more snow
+        float hasSnowParticle = step(snowThreshold, snowNoise);
+
+        terrainColor = mix(highGrass, snowParticle, hasSnowParticle);
     }
 
     // Water color based on water depth
     vec3 shallowWaterColor = vec3(0.4, 0.7, 0.9);  // Light blue - shallow water
     vec3 deepWaterColor = vec3(0.0, 0.2, 0.6);     // Dark blue - deep water
 
-    vec3 waterColor;
     if (waterDepth > 0.0) {
+        vec3 waterColor;
+
         float waterT = clamp(waterDepth / 5.0, 0.0, 1.0);
         waterColor = mix(shallowWaterColor, deepWaterColor, waterT);
 
@@ -52,14 +70,9 @@ void main() {
         terrainColor = mix(terrainColor, waterColor, waterAlpha);
     }
 
-    // lightning
-    vec3 lightDir = normalize(vec3(1.0, 1.0, 0.5));
-    float diff = max(dot(normal, lightDir), 0.0);
-    terrainColor *= diff * 0.8 + 0.2;
-
     // Obstacle overlay (e.g., rocks, buildings)
-    if (isObstacle > 0.5) {
-        terrainColor = mix(terrainColor, vec3(0.3, 0.3, 0.3), 0.5); // Dark gray overlay
+    if (isObstacle == 1.0) {
+        terrainColor = vec3(0.4, 0.4, 0.4); // Gray color for obstacles
     }
 
     fragColor = vec4(terrainColor, 1.0);
