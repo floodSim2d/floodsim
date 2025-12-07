@@ -2,7 +2,7 @@
 #define FLOODSIM_OPENGLRENDERER_H
 
 #include <QMatrix4x4>
-#include <QOpenGLFunctions_3_3_Core>
+#include <QOpenGLFunctions>
 #include <QOpenGLWidget>
 #include <QTimer>
 #include <QVector3D>
@@ -12,7 +12,7 @@
 class Cell;
 class Grid;
 
-class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions_3_3_Core {
+class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
     Q_OBJECT
 
    public:

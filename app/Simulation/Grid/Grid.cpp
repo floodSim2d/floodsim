@@ -28,7 +28,7 @@ Grid::~Grid() {
     glContext->glDeleteTextures(1, &texture);
 }
 
-void Grid::initialize(QOpenGLFunctions_3_3_Core* gl_context) {
+void Grid::initialize(QOpenGLFunctions* gl_context) {
     glContext = gl_context;
 
     createShaders();

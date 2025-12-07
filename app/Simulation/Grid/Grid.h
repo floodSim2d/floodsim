@@ -1,11 +1,10 @@
 #ifndef FLOODSIM_GRID_H
 #define FLOODSIM_GRID_H
 
-#include <qopenglfunctions_3_3_core.h>
+#include <QOpenGLFunctions>
 
 #include <QOpenGLBuffer>
 #include <QOpenGLShaderProgram>
-#include <QOpenGLTexture>
 #include <QOpenGLVertexArrayObject>
 #include <QVector2D>
 #include <vector>
@@ -17,7 +16,7 @@ class Grid {
     Grid(int width, int height, float cellSize);
     ~Grid();
 
-    void initialize(QOpenGLFunctions_3_3_Core* glContext);
+    void initialize(QOpenGLFunctions* gl_context);
     void render(const QMatrix4x4& projection, const QMatrix4x4& view) const;
 
     // getters setters
@@ -43,7 +42,7 @@ class Grid {
     void createShaders();
 
     // opengl
-    QOpenGLFunctions_3_3_Core* glContext;
+    QOpenGLFunctions* glContext;
     QOpenGLShaderProgram* shaderProgram;
     QOpenGLBuffer* vertexBuffer;  // VBO
     QOpenGLBuffer* indexBuffer;   // EBO
