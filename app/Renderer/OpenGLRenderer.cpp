@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "../Simulation/Grid/Grid.h"
+#include "../Simulation/Grid/Cell.h"
 
 OpenGLRenderer::OpenGLRenderer(QWidget* parent)
     : QOpenGLWidget(parent),
@@ -13,7 +14,8 @@ OpenGLRenderer::OpenGLRenderer(QWidget* parent)
       cameraTarget(0.0f, 0.0f, 0.0f),
       isDragging(false),
       hoveredGridX(-1),
-      hoveredGridY(-1) {
+      hoveredGridY(-1),
+      cameraPanEnabled(false) {
     setMouseTracking(true);
 }
 
@@ -36,7 +38,7 @@ void OpenGLRenderer::initializeGL() {
     qDebug() << "Renderer:" << reinterpret_cast<const char*>(glGetString(GL_RENDERER));
     qDebug() << "Version:" << reinterpret_cast<const char*>(glGetString(GL_VERSION));
 
-    grid = std::make_unique<Grid>(0, 0, 1.0F);
+    grid = std::make_unique<Grid>(200, 200, 1.0F);
     grid->initialize(this);
 
     // Center camera on grid
@@ -110,6 +112,27 @@ void OpenGLRenderer::panCamera(float deltaX, float deltaY) {
     update();
 }
 
+void OpenGLRenderer::setCameraPanEnabled(bool enabled) {
+    cameraPanEnabled = enabled;
+    emit cameraPanToggled(enabled);
+}
+
+void OpenGLRenderer::setToolType(ToolType tool) {
+    paintTool.setToolType(tool);
+}
+
+ToolType OpenGLRenderer::getCurrentToolType() const {
+    return paintTool.getToolType();
+}
+
+void OpenGLRenderer::setBrushSize(int size) {
+    paintTool.setBrushSize(size);
+}
+
+int OpenGLRenderer::getBrushSize() const {
+    return paintTool.getBrushSize();
+}
+
 void OpenGLRenderer::resetCamera() {
     if (!grid) {
         return;
@@ -140,6 +163,11 @@ void OpenGLRenderer::mousePressEvent(QMouseEvent* event) {
 
         int gridX, gridY;
         if (screenToGridCoords(event->pos().x(), event->pos().y(), gridX, gridY)) {
+            // If paint tool is active, paint the cell
+            if (paintTool.getToolType() != ToolType::None) {
+                paintTool.applyTool(grid.get(), gridX, gridY);
+                update();
+            }
             emit cellClicked(gridX, gridY);
         }
     }
@@ -148,11 +176,21 @@ void OpenGLRenderer::mousePressEvent(QMouseEvent* event) {
 }
 
 void OpenGLRenderer::mouseMoveEvent(QMouseEvent* event) {
-    // Handle camera moving while mouse dragging
+    // Handle dragging with left button
     if (isDragging && (event->buttons() & Qt::LeftButton)) {
-        const QPoint delta = event->pos() - lastMousePos;
-        panCamera(static_cast<float>(delta.x()), static_cast<float>(delta.y()));
-        lastMousePos = event->pos();
+        if (cameraPanEnabled) {
+            // Camera panning mode
+            const QPoint delta = event->pos() - lastMousePos;
+            panCamera(static_cast<float>(delta.x()), static_cast<float>(delta.y()));
+            lastMousePos = event->pos();
+        } else if (paintTool.getToolType() != ToolType::None) {
+            // Paint mode - paint on drag
+            int gridX, gridY;
+            if (screenToGridCoords(event->pos().x(), event->pos().y(), gridX, gridY)) {
+                paintTool.applyTool(grid.get(), gridX, gridY);
+                update();
+            }
+        }
     }
 
     // Handle hover - show cell label
@@ -219,3 +257,4 @@ bool OpenGLRenderer::screenToGridCoords(const int screenX, const int screenY, in
 
     return grid->isValidPosition(gridX, gridY);
 }
+

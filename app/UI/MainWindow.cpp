@@ -6,6 +6,7 @@
 #include <QLabel>
 #include <QMenuBar>
 #include <QPushButton>
+#include <QSlider>
 #include <QSpinBox>
 #include <QStatusBar>
 #include <QToolBar>
@@ -13,6 +14,7 @@
 #include <QWidget>
 
 #include "../Simulation/Grid/Grid.h"
+#include "../Renderer/OpenGLRenderer.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), renderer(nullptr), heightLabel(nullptr)
@@ -97,11 +99,11 @@ void MainWindow::setupMenuBar() {
 
 void MainWindow::setupToolBar() {
     QToolBar *toolbar = addToolBar("Toolbar");
-    QAction* playAction = toolbar->addAction("▶ Start");
-    QAction* pauseAction = toolbar->addAction("⏸ Stop");
-    QAction* stepAction = toolbar->addAction("⏭ Krok");
+    const QAction* playAction = toolbar->addAction("▶ Start");
+    const QAction* pauseAction = toolbar->addAction("⏸ Stop");
+    const QAction* stepAction = toolbar->addAction("⏭ Krok");
     toolbar->addSeparator();
-    QAction* resetAction = toolbar->addAction("Reset");
+    const QAction * resetAction = toolbar->addAction("Reset");
 
     // Create height info label in toolbar
     toolbar->addSeparator();
@@ -113,9 +115,12 @@ void MainWindow::setupToolBar() {
     // event listeners
     connect(renderer, &OpenGLRenderer::cellHovered , this, [this](int gridX, int gridY, const Cell& cell) {
         QString label = QString("Wysokość terenu: %1").arg(cell.getTerrainHeight(), 0, 'f', 2);
-        if (cell.getWaterDepth() > 0.0f) {
-            label += QString(" | Głębokość wody: %1").arg(cell.getWaterDepth(), 0, 'f', 2);
+        if (const auto waterDepth = cell.getWaterDepth(); waterDepth > 0.0F) {
+            label += QString(" | Głębokość wody: %1").arg(waterDepth, 0, 'f', 2);
             label += QString(" | Całkowita wysokość: %1").arg(cell.getTotalHeight(), 0, 'f', 2);
+        }
+        if (const auto velocity = cell.getVelocity(); velocity.length() > 0.01F) {
+            label += QString(" | Prędkość wody: (%1, %2)").arg(velocity.x(), 0, 'f', 2).arg(velocity.y(), 0, 'f', 2);
         }
 
         // Additional flags
@@ -157,59 +162,134 @@ void MainWindow::setupStatusBar() {
 
 QWidget* MainWindow::setupLeftPanel() {
     auto *panel = new QWidget(this);
-    auto *v = new QVBoxLayout(panel);
+    auto *layout = new QVBoxLayout(panel);
 
-    auto *btnTerrain   = new QPushButton("Teren");
-    auto *btnObstacle  = new QPushButton("Przeszkoda");
-    auto *btnRiver     = new QPushButton("Rzeka");
-    auto *btnRain      = new QPushButton("Źródło wody");
-    auto *btnEraser    = new QPushButton("Gumka");
+    layout->addWidget(new QLabel("Narzędzia:", panel));
+    layout->addSpacing(10);
 
-    v->addWidget(btnTerrain);
-    v->addWidget(btnObstacle);
-    v->addWidget(btnRiver);
-    v->addWidget(btnRain);
-    v->addWidget(btnEraser);
-    v->addStretch();
+    // Tool button configuration
+    struct ToolButton {
+        QPushButton* button;
+        ToolType type;
+        QString message;
+    };
 
-    // TODO: replace with OpenGLRenderer class functions
-    // connect(btnTerrain,  &QPushButton::clicked, [this](){ mapView->setTool(MapView::Tool::Terrain); });
-    // connect(btnObstacle, &QPushButton::clicked, [this](){ mapView->setTool(MapView::Tool::Obstacle); });
-    // connect(btnRiver,    &QPushButton::clicked, [this](){ mapView->setTool(MapView::Tool::River); });
-    // connect(btnRain,     &QPushButton::clicked, [this](){ mapView->setTool(MapView::Tool::WaterSource); });
-    // connect(btnEraser,   &QPushButton::clicked, [this](){ mapView->setTool(MapView::Tool::Eraser); });
+    // Create buttons
+    auto *btnCameraPan = new QPushButton("Kamera", panel);
+    auto *btnTerrain = new QPushButton("Teren", panel);
+    auto *btnObstacle = new QPushButton("Przeszkoda", panel);
+    auto *btnRiver = new QPushButton("Rzeka", panel);
+    auto *btnRain = new QPushButton("Źródło wody", panel);
+    auto *btnEraser = new QPushButton("Gumka", panel);
+
+    // Configure tool buttons with their types and messages
+    std::vector<ToolButton> toolButtons = {
+        {btnCameraPan, ToolType::None, "Tryb kamery włączony - przeciągnij aby przesunąć widok"},
+        {btnTerrain, ToolType::Terrain, "Narzędzie: Teren - kliknij aby podnieść teren"},
+        {btnObstacle, ToolType::Obstacle, "Narzędzie: Przeszkoda - kliknij aby umieścić przeszkodę"},
+        {btnRiver, ToolType::River, "Narzędzie: Rzeka - kliknij aby utworzyć rzekę"},
+        {btnRain, ToolType::WaterSource, "Narzędzie: Źródło wody - kliknij aby dodać źródło wody"},
+        {btnEraser, ToolType::Eraser, "Narzędzie: Gumka - kliknij aby wyczyścić komórkę"}
+    };
+
+    // Setup all buttons
+    for (auto& toolBtn : toolButtons) {
+        toolBtn.button->setCheckable(true);
+        toolBtn.button->setStyleSheet(
+            "QPushButton { padding: 8px; font-weight: bold; }"
+            "QPushButton:checked { background-color: #4CAF50; color: white; }"
+        );
+        layout->addWidget(toolBtn.button);
+    }
+
+    // Brush size slider
+    layout->addSpacing(10);
+    auto *brushSizeLabel = new QLabel("Rozmiar pędzla:", panel);
+    layout->addWidget(brushSizeLabel);
+
+    auto *brushSizeSlider = new QSlider(Qt::Horizontal, panel);
+    brushSizeSlider->setMinimum(1);
+    brushSizeSlider->setMaximum(10);
+    brushSizeSlider->setValue(1);
+    brushSizeSlider->setTickPosition(QSlider::TicksBelow);
+    brushSizeSlider->setTickInterval(1);
+    layout->addWidget(brushSizeSlider);
+
+    auto *brushSizeValueLabel = new QLabel("1", panel);
+    brushSizeValueLabel->setAlignment(Qt::AlignCenter);
+    layout->addWidget(brushSizeValueLabel);
+
+    layout->addStretch();
+
+    connect(brushSizeSlider, &QSlider::valueChanged, this, [this, brushSizeValueLabel](int value) {
+        renderer->setBrushSize(value);
+        brushSizeValueLabel->setText(QString::number(value));
+    });
+
+    // Connect all tool buttons with a loop
+    for (const auto& toolBtn : toolButtons) {
+        if (toolBtn.type == ToolType::None) {
+            // Special handling for camera button
+            connect(toolBtn.button, &QPushButton::toggled, this, [this, toolButtons, toolBtn](bool checked) {
+                renderer->setCameraPanEnabled(checked);
+                if (checked) {
+                    for (const auto& btn : toolButtons) {
+                        if (btn.type != ToolType::None) {
+                            btn.button->setChecked(false);
+                        }
+                    }
+                    renderer->setToolType(ToolType::None);
+                    statusBar()->showMessage(toolBtn.message);
+                }
+            });
+        } else {
+            // Paint tool buttons
+            connect(toolBtn.button, &QPushButton::clicked, this, [this, toolButtons, currentTool = toolBtn](bool) {
+                // Disable camera mode
+                toolButtons[0].button->setChecked(false);
+                renderer->setCameraPanEnabled(false);
+
+                renderer->setToolType(currentTool.type);
+
+                for (const auto& btn : toolButtons) {
+                    btn.button->setChecked(btn.button == currentTool.button);
+                }
+
+                statusBar()->showMessage(currentTool.message);
+            });
+        }
+    }
 
     return panel;
 }
 
 QWidget* MainWindow::setupRightPanel() {
     auto *panel = new QWidget(this);
-
     panel->setAutoFillBackground(true);
 
-    auto *v = new QVBoxLayout(panel);
+    auto *panelLayout = new QVBoxLayout(panel);
 
     auto *grp = new QGroupBox("Parametry", panel);
-    auto *g = new QVBoxLayout(grp);
+    auto *groupLayout = new QVBoxLayout(grp);
 
-    auto *const spinK = new QDoubleSpinBox();
+    auto *spinK = new QDoubleSpinBox(grp);
     spinK->setRange(0, 100);
     spinK->setValue(1);
 
-    const auto spinDepth = new QSpinBox();
+    auto *spinDepth = new QSpinBox(grp);
     spinDepth->setRange(1, 100);
     spinDepth->setValue(10);
 
-    g->addWidget(new QLabel("K:"));
-    g->addWidget(spinK);
-    g->addWidget(new QLabel("Max głębokość:"));
-    g->addWidget(spinDepth);
+    groupLayout->addWidget(new QLabel("K:", grp));
+    groupLayout->addWidget(spinK);
+    groupLayout->addWidget(new QLabel("Max głębokość:", grp));
+    groupLayout->addWidget(spinDepth);
 
-    auto *const apply = new QPushButton("Zastosuj");
-    g->addWidget(apply);
+    auto *apply = new QPushButton("Zastosuj", grp);
+    groupLayout->addWidget(apply);
 
-    v->addWidget(grp);
-    v->addStretch();
+    panelLayout->addWidget(grp);
+    panelLayout->addStretch();
 
     return panel;
 }

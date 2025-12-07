@@ -8,6 +8,8 @@ add_executable(floodsim
         Renderer/OpenGLRenderer.cpp
         Simulation/Grid/Cell.cpp
         Simulation/Grid/Cell.h
+        Simulation/Tools/PaintTool.h
+        Simulation/Tools/PaintTool.cpp
 )
 
 target_link_libraries(floodsim PRIVATE

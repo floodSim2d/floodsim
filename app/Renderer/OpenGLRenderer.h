@@ -9,6 +9,8 @@
 #include <memory>
 #include <QString>
 
+#include "../Simulation/Tools/PaintTool.h"
+
 class Cell;
 class Grid;
 
@@ -26,10 +28,19 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
     void setZoom(float zoom);
     void panCamera(float deltaX, float deltaY);
     void resetCamera();
+    void setCameraPanEnabled(bool enabled);
+    bool isCameraPanEnabled() const { return cameraPanEnabled; }
+
+    // Paint tool
+    void setToolType(ToolType tool);
+    ToolType getCurrentToolType() const;
+    void setBrushSize(int size);
+    int getBrushSize() const;
 
    signals:
     void cellHovered(int gridX, int gridY, const Cell& cell);
     void cellClicked(int gridX, int gridY);
+    void cameraPanToggled(bool enabled);
 
    protected:
     void initializeGL() override;
@@ -62,6 +73,10 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
     bool isDragging;
     int hoveredGridX;
     int hoveredGridY;
+
+    // Paint tool
+    PaintTool paintTool;
+    bool cameraPanEnabled;
 };
 
 #endif  // FLOODSIM_OPENGLRENDERER_H
