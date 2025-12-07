@@ -8,6 +8,7 @@ Grid::Grid(const int width, const int height, const float cellSize)
       vertexBuffer(nullptr),
       indexBuffer(nullptr),
       VAO(nullptr),
+      heightTexture(nullptr),
       width(width),
       height(height),
       cellSize(cellSize),
@@ -20,12 +21,13 @@ Grid::~Grid() {
     VAO->destroy();
     indexBuffer->destroy();
     vertexBuffer->destroy();
+    heightTexture->destroy();
 
     delete shaderProgram;
     delete vertexBuffer;
     delete indexBuffer;
     delete VAO;
-    glContext->glDeleteTextures(1, &texture);
+    delete heightTexture;
 }
 
 void Grid::initialize(QOpenGLFunctions* gl_context) {
@@ -180,22 +182,32 @@ void Grid::createMesh() {
 }
 
 void Grid::createHeightTexture() {
-    // if texture is equal to 0 it means it wasnt created yet
-    if (texture == 0) {
-        glGenTextures(1, &texture);
+    if (heightTexture != nullptr) {
+        heightTexture->destroy();
+        delete heightTexture;
     }
-    glContext->glBindTexture(GL_TEXTURE_2D, texture);
-    glContext->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glContext->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glContext->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, width, height, 0, GL_RGB, GL_FLOAT, nullptr);
-    glContext->glBindTexture(GL_TEXTURE_2D, 0);
+
+    heightTexture = new QOpenGLTexture(QOpenGLTexture::Target2D);
+    heightTexture->create();
+    heightTexture->setSize(width, height);
+    heightTexture->setFormat(QOpenGLTexture::RGB32F);
+    heightTexture->allocateStorage();
+
+    heightTexture->setMinificationFilter(QOpenGLTexture::Nearest);
+    heightTexture->setMagnificationFilter(QOpenGLTexture::Nearest);
+    heightTexture->setWrapMode(QOpenGLTexture::ClampToEdge);
 
     updateHeightTexture();
 }
 
 void Grid::updateHeightTexture() const {
+    if (heightTexture == nullptr) {
+        qDebug() << "heightTexture is null";
+        return;
+    }
+
     // Extract height values from Cell objects into a flat array
-    // Format: RGB32F where R = terrain height, G = water depth, B = total height
+    // Format: RGB32F where R = obstacle flag, G = terrain height, B = water depth
     // TODO: if possible optimize to avoid allocation each time
     std::vector<float> textureData(width * height * 3);
     for (unsigned int i = 0; i < heightMap.size(); i++) {
@@ -204,9 +216,14 @@ void Grid::updateHeightTexture() const {
         textureData[i * 3 + 2] = heightMap[i].getWaterDepth();
     }
 
-    glContext->glBindTexture(GL_TEXTURE_2D, texture);
+    heightTexture->bind();
+
+    // Set pixel alignment for proper texture upload on macOS
+    glContext->glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glContext->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGB, GL_FLOAT, textureData.data());
-    glContext->glBindTexture(GL_TEXTURE_2D, 0);
+    glContext->glPixelStorei(GL_UNPACK_ALIGNMENT, 4); // Restore default
+
+    heightTexture->release();
 }
 
 void Grid::render(const QMatrix4x4& projection, const QMatrix4x4& view) const {
@@ -217,7 +234,7 @@ void Grid::render(const QMatrix4x4& projection, const QMatrix4x4& view) const {
     shaderProgram->bind();
 
     glContext->glActiveTexture(GL_TEXTURE0);
-    glContext->glBindTexture(GL_TEXTURE_2D, texture);
+    heightTexture->bind();
 
     shaderProgram->setUniformValue("view", view);
     shaderProgram->setUniformValue("projection", projection);
@@ -294,7 +311,10 @@ void Grid::loadHeightmap(const QString& filename) {
         width = file_width;
         height = file_height;
         heightMap.resize(width * height);
-        texture = 0;
+        if (heightTexture != nullptr) {
+            delete heightTexture;
+            heightTexture = nullptr;
+        }
     }
 
     for (auto &cell : heightMap) {

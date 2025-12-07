@@ -5,6 +5,7 @@
 
 #include <QOpenGLBuffer>
 #include <QOpenGLShaderProgram>
+#include <QOpenGLTexture>
 #include <QOpenGLVertexArrayObject>
 #include <QVector2D>
 #include <vector>
@@ -47,7 +48,7 @@ class Grid {
     QOpenGLBuffer* vertexBuffer;  // VBO
     QOpenGLBuffer* indexBuffer;   // EBO
     QOpenGLVertexArrayObject* VAO;
-    GLuint texture = 0;
+    QOpenGLTexture* heightTexture;
 
     // grid data
     unsigned int width;
