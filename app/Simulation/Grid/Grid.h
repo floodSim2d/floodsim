@@ -48,7 +48,7 @@ class Grid {
     QOpenGLBuffer* vertexBuffer;  // VBO
     QOpenGLBuffer* indexBuffer;   // EBO
     QOpenGLVertexArrayObject* VAO;
-    QOpenGLTexture* heightTexture;
+    GLuint texture = 0;
 
     // grid data
     unsigned int width;

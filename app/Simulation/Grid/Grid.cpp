@@ -8,7 +8,6 @@ Grid::Grid(const int width, const int height, const float cellSize)
       vertexBuffer(nullptr),
       indexBuffer(nullptr),
       VAO(nullptr),
-      heightTexture(nullptr),
       width(width),
       height(height),
       cellSize(cellSize),
@@ -26,7 +25,7 @@ Grid::~Grid() {
     delete vertexBuffer;
     delete indexBuffer;
     delete VAO;
-    delete heightTexture;
+    glContext->glDeleteTextures(1, &texture);
 }
 
 void Grid::initialize(QOpenGLFunctions_3_3_Core* gl_context) {
@@ -181,25 +180,20 @@ void Grid::createMesh() {
 }
 
 void Grid::createHeightTexture() {
-    heightTexture = new QOpenGLTexture(QOpenGLTexture::Target2D);
-    heightTexture->create();
-    heightTexture->setSize(width, height);
-    heightTexture->setFormat(QOpenGLTexture::RGB32F);
-    heightTexture->allocateStorage();
-
-    heightTexture->setMinificationFilter(QOpenGLTexture::LinearMipMapLinear);
-    heightTexture->setMagnificationFilter(QOpenGLTexture::Nearest);
-    heightTexture->setWrapMode(QOpenGLTexture::WrapMode::ClampToEdge);
+    // if texture is equal to 0 it means it wasnt created yet
+    if (texture == 0) {
+        glGenTextures(1, &texture);
+    }
+    glContext->glBindTexture(GL_TEXTURE_2D, texture);
+    glContext->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glContext->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glContext->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, width, height, 0, GL_RGB, GL_FLOAT, nullptr);
+    glContext->glBindTexture(GL_TEXTURE_2D, 0);
 
     updateHeightTexture();
 }
 
 void Grid::updateHeightTexture() const {
-    if (heightTexture == nullptr) {
-        qDebug() << "heightTexture is null";
-        return;
-    }
-
     // Extract height values from Cell objects into a flat array
     // Format: RGB32F where R = terrain height, G = water depth, B = total height
     // TODO: if possible optimize to avoid allocation each time
@@ -210,9 +204,9 @@ void Grid::updateHeightTexture() const {
         textureData[i * 3 + 2] = heightMap[i].getWaterDepth();
     }
 
-    heightTexture->bind();
+    glContext->glBindTexture(GL_TEXTURE_2D, texture);
     glContext->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGB, GL_FLOAT, textureData.data());
-    heightTexture->generateMipMaps();
+    glContext->glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void Grid::render(const QMatrix4x4& projection, const QMatrix4x4& view) const {
@@ -223,7 +217,7 @@ void Grid::render(const QMatrix4x4& projection, const QMatrix4x4& view) const {
     shaderProgram->bind();
 
     glContext->glActiveTexture(GL_TEXTURE0);
-    heightTexture->bind();
+    glContext->glBindTexture(GL_TEXTURE_2D, texture);
 
     shaderProgram->setUniformValue("view", view);
     shaderProgram->setUniformValue("projection", projection);
@@ -300,8 +294,7 @@ void Grid::loadHeightmap(const QString& filename) {
         width = file_width;
         height = file_height;
         heightMap.resize(width * height);
-        delete heightTexture;
-        heightTexture = nullptr;
+        texture = 0;
     }
 
     for (auto &cell : heightMap) {
