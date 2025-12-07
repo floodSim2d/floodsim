@@ -15,13 +15,6 @@ OpenGLRenderer::OpenGLRenderer(QWidget* parent)
       hoveredGridX(-1),
       hoveredGridY(-1) {
     setMouseTracking(true);
-
-    QSurfaceFormat format;
-    format.setDepthBufferSize(24);
-    format.setStencilBufferSize(8);
-    format.setVersion(4, 1);
-    format.setProfile(QSurfaceFormat::CoreProfile);
-    setFormat(format);
 }
 
 OpenGLRenderer::~OpenGLRenderer() {
