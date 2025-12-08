@@ -9,6 +9,12 @@
 #include <memory>
 #include <QString>
 
+#include "../Simulation/Tools/PaintTool.h"
+
+constexpr float CAMERA_ZOOM_MAX = 100.0F;
+constexpr float CAMERA_ZOOM_MIN = 10.0F;
+constexpr float CAMERA_MAX_HEIGHT = 1000.0F;
+
 class Cell;
 class Grid;
 
@@ -26,10 +32,17 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
     void setZoom(float zoom);
     void panCamera(float deltaX, float deltaY);
     void resetCamera();
+    void setCameraPanEnabled(bool enabled);
+    bool isCameraPanEnabled() const { return cameraPanEnabled; }
+    void updateProjectionMatrix();
+
+    // Paint tool
+    auto getPaintTool() const -> PaintTool* { return paintTool; }
 
    signals:
     void cellHovered(int gridX, int gridY, const Cell& cell);
     void cellClicked(int gridX, int gridY);
+    void cameraPanToggled(bool enabled);
 
    protected:
     void initializeGL() override;
@@ -38,11 +51,11 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
 
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
 
    private:
     void setupCamera();
-    void updateProjectionMatrix();
     bool screenToGridCoords(int screenX, int screenY, int& gridX, int& gridY) const;
 
     // Grid
@@ -62,6 +75,10 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
     bool isDragging;
     int hoveredGridX;
     int hoveredGridY;
+
+    // Paint tool
+    PaintTool* paintTool;
+    bool cameraPanEnabled;
 };
 
 #endif  // FLOODSIM_OPENGLRENDERER_H

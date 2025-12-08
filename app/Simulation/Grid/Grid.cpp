@@ -2,7 +2,7 @@
 
 #include <QFile>
 
-Grid::Grid(const int width, const int height, const float cellSize)
+Grid::Grid(const int width, const int height, const float cellSize, const float maxDepth)
     : glContext(nullptr),
       shaderProgram(nullptr),
       vertexBuffer(nullptr),
@@ -12,6 +12,7 @@ Grid::Grid(const int width, const int height, const float cellSize)
       width(width),
       height(height),
       cellSize(cellSize),
+      maxDepth(maxDepth),
       indexCount(0),
       meshResolution(200) { // TODO: replace with parameter or something that isnt magic number
     heightMap.resize(width * height, Cell());
@@ -38,61 +39,61 @@ void Grid::initialize(QOpenGLFunctions* gl_context) {
     createHeightTexture();
 
     // Create realistic terrain with land, water, hills, and valleys
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            const float nx = static_cast<float>(x) / static_cast<float>(width);
-            const float ny = static_cast<float>(y) / static_cast<float>(height);
-
-            // Base terrain - rolling hills using multiple sine waves
-            float terrain = 3.0F + 2.0F * std::sin(nx * 3.14159F * 3.0F) * std::cos(ny * 3.14159F * 2.0F);
-            terrain += 1.5F * std::sin(nx * 6.28F * 2.0F + ny * 6.28F * 1.5F);
-
-            // Add some mountains in the upper-left quadrant
-            if (nx < 0.4F && ny < 0.4F) {
-                const float distFromCorner = std::sqrt(nx * nx + ny * ny);
-                terrain += 4.0F * std::exp(-distFromCorner * 5.0F);
-            }
-
-            // Create a valley/river channel running diagonally
-            const float riverDist = std::abs((nx - ny) * std::sqrt(2.0F));
-            if (riverDist < 0.15F) {
-                // River valley - lower terrain
-                terrain -= 3.0F * (1.0F - riverDist / 0.15F);
-                terrain = std::max(0.5F, terrain);
-            }
-
-            // Create a lake in the lower-right area
-            const float lakeCenterX = 0.7F;
-            const float lakeCenterY = 0.7F;
-            const float distFromLake = std::sqrt((nx - lakeCenterX) * (nx - lakeCenterX) +
-                                                  (ny - lakeCenterY) * (ny - lakeCenterY));
-            if (distFromLake < 0.2F) {
-                // Lake depression
-                terrain -= 2.5F * (1.0F - distFromLake / 0.2F);
-                terrain = std::max(0.3F, terrain);
-            }
-
-            // Ensure terrain is not negative
-            terrain = std::max(0.0F, terrain);
-
-            // Add water based on terrain height
-            float waterDepth = 0.0F;
-
-            // River water
-            if (riverDist < 0.08F && terrain < 2.5F) {
-                waterDepth = 1.5F - (terrain - 0.5F) * 0.5F;
-                waterDepth = std::max(0.0F, std::min(2.0F, waterDepth));
-            }
-
-            // Lake water - deeper in center
-            if (distFromLake < 0.15F) {
-                waterDepth = 3.0F * (1.0F - distFromLake / 0.15F);
-                waterDepth = std::max(0.0F, std::min(3.5F, waterDepth));
-            }
-
-            setCell(x, y, Cell{terrain, waterDepth,  false, (riverDist < 0.15F), false, 5.0F});
-        }
-    }
+    // for (int y = 0; y < height; ++y) {
+    //     for (int x = 0; x < width; ++x) {
+    //         const float nx = static_cast<float>(x) / static_cast<float>(width);
+    //         const float ny = static_cast<float>(y) / static_cast<float>(height);
+    //
+    //         // Base terrain - rolling hills using multiple sine waves
+    //         float terrain = 3.0F + 2.0F * std::sin(nx * 3.14159F * 3.0F) * std::cos(ny * 3.14159F * 2.0F);
+    //         terrain += 1.5F * std::sin(nx * 6.28F * 2.0F + ny * 6.28F * 1.5F);
+    //
+    //         // Add some mountains in the upper-left quadrant
+    //         if (nx < 0.4F && ny < 0.4F) {
+    //             const float distFromCorner = std::sqrt(nx * nx + ny * ny);
+    //             terrain += 4.0F * std::exp(-distFromCorner * 5.0F);
+    //         }
+    //
+    //         // Create a valley/river channel running diagonally
+    //         const float riverDist = std::abs((nx - ny) * std::sqrt(2.0F));
+    //         if (riverDist < 0.15F) {
+    //             // River valley - lower terrain
+    //             terrain -= 3.0F * (1.0F - riverDist / 0.15F);
+    //             terrain = std::max(0.5F, terrain);
+    //         }
+    //
+    //         // Create a lake in the lower-right area
+    //         const float lakeCenterX = 0.7F;
+    //         const float lakeCenterY = 0.7F;
+    //         const float distFromLake = std::sqrt((nx - lakeCenterX) * (nx - lakeCenterX) +
+    //                                               (ny - lakeCenterY) * (ny - lakeCenterY));
+    //         if (distFromLake < 0.2F) {
+    //             // Lake depression
+    //             terrain -= 2.5F * (1.0F - distFromLake / 0.2F);
+    //             terrain = std::max(0.3F, terrain);
+    //         }
+    //
+    //         // Ensure terrain is not negative
+    //         terrain = std::max(0.0F, terrain);
+    //
+    //         // Add water based on terrain height
+    //         float waterDepth = 0.0F;
+    //
+    //         // River water
+    //         if (riverDist < 0.08F && terrain < 2.5F) {
+    //             waterDepth = 1.5F - (terrain - 0.5F) * 0.5F;
+    //             waterDepth = std::max(0.0F, std::min(2.0F, waterDepth));
+    //         }
+    //
+    //         // Lake water - deeper in center
+    //         if (distFromLake < 0.15F) {
+    //             waterDepth = 3.0F * (1.0F - distFromLake / 0.15F);
+    //             waterDepth = std::max(0.0F, std::min(3.5F, waterDepth));
+    //         }
+    //
+    //         setCell(x, y, Cell{terrain, waterDepth,  false, (riverDist < 0.15F), false, 5.0F});
+    //     }
+    // }
     updateHeightTexture();
 }
 
@@ -211,7 +212,7 @@ void Grid::updateHeightTexture() const {
     // TODO: if possible optimize to avoid allocation each time
     std::vector<float> textureData(width * height * 3);
     for (unsigned int i = 0; i < heightMap.size(); i++) {
-        textureData[i * 3 + 0] = heightMap[i].isObstacle() ? 1.0F : 0.0F;
+        textureData[i * 3 + 0] = heightMap[i].getType() == OBSTACLE ? 1.0F : 0.0F;
         textureData[i * 3 + 1] = heightMap[i].getTerrainHeight();
         textureData[i * 3 + 2] = heightMap[i].getWaterDepth();
     }

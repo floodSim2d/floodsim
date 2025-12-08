@@ -1,6 +1,9 @@
 #include "Cell.h"
 
- Cell::Cell(float height, float water_depth, bool is_obstacle, bool is_river, bool is_water_source,
+#include "Grid.h"
+#include "../../Renderer/OpenGLRenderer.h"
+
+Cell::Cell(float height, float water_depth, bool is_obstacle, bool is_river, bool is_water_source,
            float river_capacity)
                : terrainHeight(height),
                  waterDepth( water_depth),
@@ -12,11 +15,16 @@
 {
 }
 
+void Cell::setTerrainHeight(float height) {
+    terrainHeight = std::max(-1.0F * MAX_WATER_DEPTH, height);
+}
 
-CellType Cell::getType() const {
+
+auto Cell::getType() const -> CellType {
     if (obstacle) return OBSTACLE;
-    if (waterDepth > 0.01f) return WATER;  // Small threshold to avoid floating point issues
-    if (terrainHeight > 0.01f) return LAND;
+    if (waterDepth > 0.01F && river) return RIVER;
+    if (waterDepth > 0.01F && waterSource) return WATER_SOURCE;
+    if (terrainHeight > 0.01F) return LAND;
     return EMPTY;
 }
 
@@ -26,54 +34,63 @@ void Cell::setType(CellType type) {
             obstacle = true;
             river = false;
             waterSource = false;
+            waterDepth = 0.0f;
+            terrainHeight = CAMERA_MAX_HEIGHT;
             break;
-        case WATER:
+        case RIVER:
+            river = true;
             obstacle = false;
-            // Keep water depth as is or set a minimum
-            if (waterDepth < 0.1f) waterDepth = 0.5f;
+            waterSource = false;
+
+            // set minimum
+            if (waterDepth < 0.1F) {
+                waterDepth = 0.5F;
+            }
             break;
         case LAND:
             obstacle = false;
-            if (terrainHeight < 0.1f) terrainHeight = 1.0f;
+            if (terrainHeight < 0.1F) {
+                terrainHeight = 1.0F;
+            }
             break;
         case EMPTY:
             obstacle = false;
             river = false;
             waterSource = false;
-            terrainHeight = 0.0f;
-            waterDepth = 0.0f;
+            terrainHeight = 0.0F;
+            waterDepth = 0.0F;
             break;
     }
 }
 
 float Cell::getFlowCapacity() const {
-    if (obstacle) return 0.0f;
+    if (obstacle) return 0.0F;
 
     if (river) {
-        return std::max(0.0f, riverCapacity - waterDepth);
+        return std::max(0.0F, riverCapacity - waterDepth);
     }
 
-    return 1000.0f;
+    return 1000.0F;  // Arbitrary high value for non-river cells
 }
 
 void Cell::reset() {
-    terrainHeight = 0.0f;
-    waterDepth = 0.0f;
-    velocity = QVector2D(0.0f, 0.0f);
+    terrainHeight = 0.0F;
+    waterDepth = 0.0F;
+    velocity = QVector2D(0.0F, 0.0F);
     obstacle = false;
     river = false;
     waterSource = false;
-    riverCapacity = 3.0f;
+    riverCapacity = 3.0F;
 }
 
 void Cell::resetWater() {
-    waterDepth = 0.0f;
-    velocity = QVector2D(0.0f, 0.0f);
+    waterDepth = 0.0F;
+    velocity = QVector2D(0.0F, 0.0F);
 }
 
 // stream operator overloads for data serialization
 
-QDataStream& operator<<(QDataStream& stream, const Cell& cell) {
+auto operator<<(QDataStream& stream, const Cell& cell) -> QDataStream& {
     stream << cell.terrainHeight;
     stream << cell.waterDepth;
     stream << cell.velocity;
@@ -84,7 +101,7 @@ QDataStream& operator<<(QDataStream& stream, const Cell& cell) {
     return stream;
 }
 
-QDataStream& operator>>(QDataStream& stream, Cell& cell) {
+auto operator>>(QDataStream& stream, Cell& cell) -> QDataStream& {
     stream >> cell.terrainHeight;
     stream >> cell.waterDepth;
     stream >> cell.velocity;
