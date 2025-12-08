@@ -1,34 +1,33 @@
-cmake_minimum_required(VERSION 3.16)
-project(floodsim LANGUAGES CXX)
-
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# Qt6
-find_package(Qt6 REQUIRED COMPONENTS
-        Core
-        Gui
-        Widgets
-        OpenGLWidgets
-)
-
 add_executable(floodsim
         main.cpp
         UI/MainWindow.h
         UI/MainWindow.cpp
-        UI/MapView.h
-        UI/MapView.cpp
+        Simulation/Grid/Grid.cpp
+        Simulation/Grid/Grid.h
+        Renderer/OpenGLRenderer.h
+        Renderer/OpenGLRenderer.cpp
+        Simulation/Grid/Cell.cpp
+        Simulation/Grid/Cell.h
 )
 
 target_link_libraries(floodsim PRIVATE
-        Qt6::Core
-        Qt6::Gui
-        Qt6::Widgets
-        Qt6::OpenGLWidgets
+    Qt::Core
+    Qt::Gui
+    Qt::Widgets
+    Qt::OpenGL
+    Qt::OpenGLWidgets
 )
 
+# Ensure moc/uic/rcc are active for this target
 set_target_properties(floodsim PROPERTIES
         AUTOMOC ON
         AUTOUIC ON
         AUTORCC ON
+)
+
+qt_add_resources(floodsim "shaders"
+        PREFIX "/"
+        FILES
+            "Simulation/Grid/shaders/grid.vert"
+            "Simulation/Grid/shaders/grid.frag"
 )

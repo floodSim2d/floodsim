@@ -1,7 +1,7 @@
 #pragma once
 #include <QMainWindow>
-
-class MapView;
+#include <QLabel>
+#include "../Renderer/OpenGLRenderer.h"
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -15,5 +15,6 @@ private:
     QWidget* setupRightPanel();
     void setupStatusBar();
 
-    MapView *mapView;
+    OpenGLRenderer* renderer;
+    QLabel* heightLabel;
 };
