@@ -34,6 +34,7 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
     void resetCamera();
     void setCameraPanEnabled(bool enabled);
     bool isCameraPanEnabled() const { return cameraPanEnabled; }
+    void updateProjectionMatrix();
 
     // Paint tool
     auto getPaintTool() const -> PaintTool* { return paintTool; }
@@ -55,7 +56,6 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
 
    private:
     void setupCamera();
-    void updateProjectionMatrix();
     bool screenToGridCoords(int screenX, int screenY, int& gridX, int& gridY) const;
 
     // Grid

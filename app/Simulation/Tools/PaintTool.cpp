@@ -58,30 +58,54 @@ void PaintTool::applyTool(Grid* grid, const int centerX, const int centerY) cons
 }
 
 void PaintTool::applySingleCell(Cell* cell) const {
-    if (cell == nullptr) {
+    if (cell == nullptr || currentGrid == nullptr) {
         return;
     }
 
     switch (currentTool) {
         case ToolType::Terrain:
-            // Increase terrain height
+            if (cell->getType() != LAND) {
+                cell->setType(LAND);
+            }
             cell->setTerrainHeight(std::min(cell->getTerrainHeight() + 0.5F, CAMERA_MAX_HEIGHT));
             break;
 
         case ToolType::Obstacle:
-            // Set as obstacle
-            cell->setObstacle(true);
+            if (cell->getType() != OBSTACLE) {
+                cell->setType(OBSTACLE);
+            }
             break;
 
         case ToolType::River:
-            cell->setRiver(true);
-            cell->setWaterDepth(std::min(cell->getWaterDepth() + 0.5F, CAMERA_MAX_HEIGHT));
+            if (cell->getType() != RIVER) {
+                cell->setType(RIVER);
+            }
+            if (cell->getWaterDepth() < cell->getRiverCapacity()) {
+                // Fill water up to river capacity
+                cell->setWaterDepth(std::min(cell->getWaterDepth() + 1.0F, cell->getRiverCapacity()));
+            } else {
+                // When water is at capacity, dig the terrain deeper (allow negative terrain)
+                // This creates deeper river channels/lakes
+                const float newHeight = cell->getTerrainHeight() - 0.5F;
+                if (newHeight >= -1.0F * currentGrid->getMaxDepth()) {
+                    cell->setTerrainHeight(newHeight);
+                }
+            }
             break;
 
         case ToolType::WaterSource:
-            // Set as water source
-            cell->setWaterSource(true);
-            cell->setWaterDepth(std::min(cell->getWaterDepth()+ 2.0F, CAMERA_MAX_HEIGHT));
+            cell->setType(WATER_SOURCE);
+            if (cell->getWaterDepth() < cell->getRiverCapacity()) {
+                // Fill water up to river capacity
+                cell->setWaterDepth(std::min(cell->getWaterDepth() + 1.0F, cell->getRiverCapacity()));
+            } else {
+                // When water is at capacity, dig the terrain deeper (allow negative terrain)
+                // This creates deeper water sources/lakes
+                const float newHeight = cell->getTerrainHeight() - 0.5F;
+                if (newHeight >= -1.0F * currentGrid->getMaxDepth()) {
+                    cell->setTerrainHeight(newHeight);
+                }
+            }
             break;
 
         case ToolType::Eraser:
@@ -96,7 +120,7 @@ void PaintTool::applySingleCell(Cell* cell) const {
 }
 
 void PaintTool::startContinuousPainting(Grid* grid, int gridX, int gridY) {
-    if (!grid || currentTool == ToolType::Camera) {
+    if (grid == nullptr || currentTool == ToolType::Camera) {
         return;
     }
 

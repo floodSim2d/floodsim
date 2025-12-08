@@ -124,13 +124,13 @@ void MainWindow::setupToolBar() {
         }
 
         // Additional flags
-        if (cell.isObstacle()) {
+        if (cell.getType() == OBSTACLE) {
             label += QString(" | Przeszkoda");
         }
-        if (cell.isRiver()) {
+        if (cell.getType() == RIVER) {
             label += QString(" | Rzeka");
         }
-        if (cell.isWaterSource()) {
+        if (cell.getType() == WATER_SOURCE) {
             label += QString(" | Źródło wody");
         }
         if (cell.getWaterDepth() > cell.getRiverCapacity()) {
@@ -276,20 +276,54 @@ QWidget* MainWindow::setupRightPanel() {
     spinK->setRange(0, 100);
     spinK->setValue(1);
 
-    auto *spinDepth = new QSpinBox(grp);
-    spinDepth->setRange(1, 100);
-    spinDepth->setValue(10);
-
     groupLayout->addWidget(new QLabel("K:", grp));
     groupLayout->addWidget(spinK);
+
+    // Max depth control with slider
     groupLayout->addWidget(new QLabel("Max głębokość:", grp));
-    groupLayout->addWidget(spinDepth);
+
+    auto *depthSlider = new QSlider(Qt::Horizontal, grp);
+    depthSlider->setMinimum(MIN_WATER_DEPTH);
+    depthSlider->setMaximum(MAX_WATER_DEPTH);
+    // Use default value (50) since Grid isn't initialized yet in constructor
+    // Grid is created in initializeGL() which is called after MainWindow constructor
+    depthSlider->setValue(DEFAULT_WATER_DEPTH);
+    depthSlider->setTickPosition(QSlider::TicksBelow);
+    depthSlider->setTickInterval(10);
+    groupLayout->addWidget(depthSlider);
+
+    auto *depthValueLabel = new QLabel(QString::number(depthSlider->value()), grp);
+    depthValueLabel->setAlignment(Qt::AlignCenter);
+    groupLayout->addWidget(depthValueLabel);
 
     auto *apply = new QPushButton("Zastosuj", grp);
     groupLayout->addWidget(apply);
 
     panelLayout->addWidget(grp);
     panelLayout->addStretch();
+
+    // Update label when slider moves (but don't apply yet)
+    connect(depthSlider, &QSlider::valueChanged, this, [depthValueLabel](int value) {
+        depthValueLabel->setText(QString::number(value));
+    });
+
+    // Apply changes only when button is clicked
+    connect(apply, &QPushButton::clicked, this, [this, spinK, depthSlider]() {
+        // Apply K value
+        const auto kValue = static_cast<float>(spinK->value());
+
+        // Apply maxDepth value
+        const auto newDepth = static_cast<float>(depthSlider->value());
+
+        auto* grid = renderer->getGrid();
+
+        if (grid != nullptr) {
+            grid->setMaxDepth(newDepth);
+            renderer->updateProjectionMatrix();
+            statusBar()->showMessage(QString("Parametry zastosowane: K=%1, Max głębokość=%2")
+            .arg(kValue, 0, 'f', 2).arg(newDepth, 0, 'f', 1));
+        }
+    });
 
     return panel;
 }

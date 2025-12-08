@@ -3,23 +3,22 @@
 
 #include <QVector2D>
 #include <algorithm>
-#include <QDataStream>
-#include <cstdint>
 
 enum CellType : std::uint8_t {
     EMPTY,
     LAND,
-    WATER,
+    RIVER,
+    WATER_SOURCE,
     OBSTACLE,
 };
 
 class Cell {
 public:
-    explicit Cell(float height = 0.0f, float water_depth = 0.0f, bool is_obstacle = false, bool is_river = false,
-                  bool is_water_source = false, float river_capacity = 3.0f);
+    explicit Cell(float height = 0.0F, float water_depth = 0.0F, bool is_obstacle = false, bool is_river = false,
+                  bool is_water_source = false, float river_capacity = 3.0F);
 
     float getTerrainHeight() const { return terrainHeight; }
-    void setTerrainHeight(float height) { terrainHeight = std::max(0.0f, height); }
+    void setTerrainHeight(float height);
 
     float getWaterDepth() const { return waterDepth; }
     void setWaterDepth(float depth) { waterDepth = std::max(0.0f, depth); }
@@ -30,15 +29,6 @@ public:
 
     CellType getType() const;
     void setType(CellType type);
-
-    bool isObstacle() const { return obstacle; }
-    void setObstacle(bool value) { obstacle = value; }
-
-    bool isRiver() const { return river; }
-    void setRiver(bool value) { river = value; }
-
-    bool isWaterSource() const { return waterSource; }
-    void setWaterSource(bool value) { waterSource = value; }
 
     // River channel capacity (max water depth before overflow)
     // Note: riverCapacity is the LIMIT, waterDepth is the CURRENT amount

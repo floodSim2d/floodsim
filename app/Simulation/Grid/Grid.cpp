@@ -2,7 +2,7 @@
 
 #include <QFile>
 
-Grid::Grid(const int width, const int height, const float cellSize)
+Grid::Grid(const int width, const int height, const float cellSize, const float maxDepth)
     : glContext(nullptr),
       shaderProgram(nullptr),
       vertexBuffer(nullptr),
@@ -12,6 +12,7 @@ Grid::Grid(const int width, const int height, const float cellSize)
       width(width),
       height(height),
       cellSize(cellSize),
+      maxDepth(maxDepth),
       indexCount(0),
       meshResolution(200) { // TODO: replace with parameter or something that isnt magic number
     heightMap.resize(width * height, Cell());
@@ -211,7 +212,7 @@ void Grid::updateHeightTexture() const {
     // TODO: if possible optimize to avoid allocation each time
     std::vector<float> textureData(width * height * 3);
     for (unsigned int i = 0; i < heightMap.size(); i++) {
-        textureData[i * 3 + 0] = heightMap[i].isObstacle() ? 1.0F : 0.0F;
+        textureData[i * 3 + 0] = heightMap[i].getType() == OBSTACLE ? 1.0F : 0.0F;
         textureData[i * 3 + 1] = heightMap[i].getTerrainHeight();
         textureData[i * 3 + 2] = heightMap[i].getWaterDepth();
     }

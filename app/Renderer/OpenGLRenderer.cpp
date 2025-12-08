@@ -41,10 +41,10 @@ void OpenGLRenderer::initializeGL() {
     qDebug() << "Renderer:" << reinterpret_cast<const char*>(glGetString(GL_RENDERER));
     qDebug() << "Version:" << reinterpret_cast<const char*>(glGetString(GL_VERSION));
 
-    grid = std::make_unique<Grid>(200, 200, 1.0F);
+    grid = std::make_unique<Grid>(200, 200, 1.0F, DEFAULT_WATER_DEPTH);
     grid->initialize(this);
 
-    // Center camera on grid
+    // Center camera on grid - position directly above for top-down view
     const float gridCenterX = static_cast<float>(grid->getWidth()) * grid->getCellSize() * 0.5F;
     const float gridCenterY = static_cast<float>(grid->getHeight()) * grid->getCellSize() * 0.5F;
     cameraPosition = QVector3D(gridCenterX, gridCenterY, CAMERA_MAX_HEIGHT);
@@ -77,21 +77,36 @@ void OpenGLRenderer::paintGL() {
 
 void OpenGLRenderer::setupCamera() {
     viewMatrix.setToIdentity();
-    viewMatrix.lookAt(cameraPosition, cameraTarget, QVector3D(0.0f, 1.0f, 0.0f));
+    viewMatrix.lookAt(cameraPosition, cameraTarget, QVector3D(0.0F, 1.0F, 0.0F));
 }
 
 void OpenGLRenderer::updateProjectionMatrix() {
     const float aspect = static_cast<float>(width()) / static_cast<float>(height());
     projectionMatrix.setToIdentity();
     const float orthoSize = cameraZoom;
+
+    // For top-down orthographic view:
+    // Camera is at z=CAMERA_MAX_HEIGHT looking down at z=0
+    // Near plane should be close to camera, far plane should be beyond the lowest terrain
+    const float maxDepth = grid ? grid->getMaxDepth() : DEFAULT_WATER_DEPTH;
+
+    // Near plane: distance from camera to highest point we want to see
+    // (small positive value means just in front of camera)
+    const float nearPlane = 0.1F;
+
+    // Far plane: distance from camera to lowest point we want to see
+    // Camera is at CAMERA_MAX_HEIGHT, terrain can go down to -maxDepth
+    // So we need to see from camera height down to -maxDepth below z=0
+    const float farPlane = CAMERA_MAX_HEIGHT + maxDepth;
+
     if (aspect > 1.0f) {
         projectionMatrix.ortho(-orthoSize * aspect, orthoSize * aspect,
                               -orthoSize, orthoSize,
-                              0.1F, CAMERA_MAX_HEIGHT);
+                              nearPlane, farPlane);
     } else {
         projectionMatrix.ortho(-orthoSize, orthoSize,
                               -orthoSize / aspect, orthoSize / aspect,
-                              0.1F, CAMERA_MAX_HEIGHT);
+                              nearPlane, farPlane);
     }
 }
 

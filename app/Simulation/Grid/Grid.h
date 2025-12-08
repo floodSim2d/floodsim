@@ -12,9 +12,13 @@
 
 #include "Cell.h"
 
+constexpr float DEFAULT_WATER_DEPTH = 50.0F;
+constexpr float MAX_WATER_DEPTH = 200.0F;
+constexpr float MIN_WATER_DEPTH = 10.0F;
+
 class Grid {
    public:
-    Grid(int width, int height, float cellSize);
+    Grid(int width, int height, float cellSize, float maxDepth = 10.0F);
     ~Grid();
 
     void initialize(QOpenGLFunctions* gl_context);
@@ -27,6 +31,8 @@ class Grid {
     auto getWidth() const { return width; }
     auto getHeight() const { return height; }
     auto getCellSize() const { return cellSize; }
+    auto getMaxDepth() const { return maxDepth; }
+    void setMaxDepth(const float depth) { maxDepth = depth; }
 
     void saveHeightmap(const QString& filename) const;
     void loadHeightmap(const QString& filename);
@@ -54,6 +60,7 @@ class Grid {
     unsigned int width;
     unsigned int height;
     float cellSize;
+    float maxDepth;
     std::vector<Cell> heightMap;
 
     // rendering data
