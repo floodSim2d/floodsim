@@ -30,7 +30,6 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
 
     // Camera control
     void setZoom(float zoom);
-    void panCamera(float deltaX, float deltaY);
     void resetCamera();
     void setCameraPanEnabled(bool enabled);
     bool isCameraPanEnabled() const { return cameraPanEnabled; }
@@ -57,6 +56,8 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
    private:
     void setupCamera();
     bool screenToGridCoords(int screenX, int screenY, int& gridX, int& gridY) const;
+    void rotateCamera(float deltaX);
+    void moveCameraUpDown(float deltaY);
 
     // Grid
     std::unique_ptr<Grid> grid;
