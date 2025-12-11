@@ -20,7 +20,7 @@
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
-    renderer = new OpenGLRenderer(this); // Ustawiono parent, aby Qt zarządzało pamięcią
+    renderer = new OpenGLRenderer(this);
 
     setWindowTitle("FloodSim — Symulator powodzi 2D");
     setupMenuBar();
@@ -70,7 +70,6 @@ void MainWindow::setupMenuBar() {
         }
     });
 
-    // Naprawiono błąd kompilacji przez użycie lambdy
     connect(newAct, &QAction::triggered, this, [this]() {
         renderer->getGrid()->clearHeightmap();
     });
@@ -108,7 +107,7 @@ QWidget* MainWindow::setupLeftPanel() {
     layout->addWidget(new QLabel("Narzędzia:", panel));
     layout->addSpacing(10);
 
-    auto* buttonGroup = new QButtonGroup(this); // Poprawne zarządzanie pamięcią
+    auto* buttonGroup = new QButtonGroup(this);
     buttonGroup->setExclusive(true);
 
     struct ToolButtonInfo {
@@ -143,9 +142,10 @@ QWidget* MainWindow::setupLeftPanel() {
         });
     }
 
-    buttonGroup->buttons().at(1)->setChecked(true); // Domyślnie "Teren"
-    renderer->getPaintTool()->setToolType(tools[1].type);
-    renderer->setCameraPanEnabled(false);
+    // Domyślnie zaznaczony przycisk "Kamera"
+    buttonGroup->buttons().at(0)->setChecked(true);
+    renderer->getPaintTool()->setToolType(tools[0].type);
+    renderer->setCameraPanEnabled(true);
 
     layout->addSpacing(10);
     auto *brushSizeLabel = new QLabel("Rozmiar pędzla:", panel);

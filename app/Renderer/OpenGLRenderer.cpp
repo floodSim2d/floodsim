@@ -10,15 +10,15 @@
 OpenGLRenderer::OpenGLRenderer(QWidget* parent)
     : QOpenGLWidget(parent),
       grid(nullptr),
-      cameraZoom(50.0f),
+      cameraMode(CameraMode::Orbit), // Zmieniono domyślny tryb
+      cameraZoom(150.0f),
       cameraTarget(0.0F, 0.0F, 0.0F),
       cameraYaw(-90.0f),
       cameraPitch(-30.0f),
       isDragging(false),
       hoveredGridX(-1),
       hoveredGridY(-1),
-      paintTool(new PaintTool(this)),
-      cameraPanEnabled(false) {
+      paintTool(new PaintTool(this)) {
     setMouseTracking(true);
     connect(paintTool, &PaintTool::paintApplied, this, QOverload<>::of(&QWidget::update));
 }
@@ -26,7 +26,7 @@ OpenGLRenderer::OpenGLRenderer(QWidget* parent)
 OpenGLRenderer::~OpenGLRenderer() {
     makeCurrent();
     grid.reset();
-    delete paintTool; // Naprawiono memory leak
+    delete paintTool;
     doneCurrent();
 }
 
@@ -40,7 +40,7 @@ void OpenGLRenderer::initializeGL() {
     grid = std::make_unique<Grid>(200, 200, 1.0F, DEFAULT_WATER_DEPTH);
     grid->initialize(this);
 
-    resetCamera();
+    resetCamera(); // Wystarczy reset, bo domyślny tryb jest już ustawiony
 }
 
 void OpenGLRenderer::resizeGL(const int width, const int height) {
@@ -55,86 +55,82 @@ void OpenGLRenderer::paintGL() {
     }
 }
 
-void OpenGLRenderer::setupCamera() {
-    viewMatrix.setToIdentity();
-
-    QVector3D direction;
-    direction.setX(cos(qDegreesToRadians(cameraYaw)) * cos(qDegreesToRadians(cameraPitch)));
-    direction.setY(sin(qDegreesToRadians(cameraPitch)));
-    direction.setZ(sin(qDegreesToRadians(cameraYaw)) * cos(qDegreesToRadians(cameraPitch)));
-
-    cameraPosition = cameraTarget - direction.normalized() * cameraZoom;
-
-    QVector3D up = QVector3D(0.0f, 1.0f, 0.0f);
-    QVector3D right = QVector3D::crossProduct(up, -direction).normalized();
-    up = QVector3D::crossProduct(-direction, right).normalized();
-
-    viewMatrix.lookAt(cameraPosition, cameraTarget, up);
-    update();
-}
-
-void OpenGLRenderer::updateProjectionMatrix() {
-    const float aspect = static_cast<float>(width()) / static_cast<float>(height());
-    projectionMatrix.setToIdentity();
-    projectionMatrix.perspective(45.0f, aspect, 0.1f, 2000.0f);
-}
-
-void OpenGLRenderer::setZoom(const float zoom) {
-    cameraZoom = std::max(CAMERA_ZOOM_MIN, std::min(CAMERA_ZOOM_MAX, zoom));
-    setupCamera();
-}
-
-void OpenGLRenderer::panCamera(float deltaX, float deltaY) {
-    QVector3D forward = cameraTarget - cameraPosition;
-    forward.setY(0);
-    forward.normalize();
-    QVector3D right = QVector3D::crossProduct(forward, QVector3D(0,1,0));
-
-    float sensitivity = 0.002f * cameraZoom;
-
-    cameraTarget -= right * deltaX * sensitivity;
-    cameraTarget -= forward * deltaY * sensitivity;
-
-    setupCamera();
-}
-
-void OpenGLRenderer::rotateCamera(float yawDelta, float pitchDelta) {
-    cameraYaw += yawDelta * 0.4f;
-    cameraPitch -= pitchDelta * 0.4f;
-    cameraPitch = std::max(-89.0f, std::min(89.0f, cameraPitch));
-    setupCamera();
-}
-
-void OpenGLRenderer::moveCameraVertical(float delta) {
-    float sensitivity = 0.005f * cameraZoom;
-    cameraTarget.setY(cameraTarget.y() + delta * sensitivity);
-    setupCamera();
+void OpenGLRenderer::setCameraMode(CameraMode mode) {
+    if (cameraMode == mode) return;
+    cameraMode = mode;
+    resetCamera();
 }
 
 void OpenGLRenderer::setCameraPanEnabled(bool enabled) {
-    cameraPanEnabled = enabled;
-    emit cameraPanToggled(enabled);
+    setCameraMode(enabled ? CameraMode::Orbit : CameraMode::TopDown);
+}
+
+bool OpenGLRenderer::isCameraPanEnabled() const {
+    return cameraMode == CameraMode::Orbit;
 }
 
 void OpenGLRenderer::resetCamera() {
     if (!grid) return;
 
     float gridCenterX = grid->getWidth() * grid->getCellSize() * 0.5F;
-    float gridCenterZ = grid->getHeight() * grid->getCellSize() * 0.5F;
+    float gridCenterY = grid->getHeight() * grid->getCellSize() * 0.5F;
 
-    cameraTarget = QVector3D(gridCenterX, 0.0f, gridCenterZ);
-    cameraYaw = -90.0f;
-    cameraPitch = -30.0f;
-    cameraZoom = 150.0f;
-
+    if (cameraMode == CameraMode::TopDown) {
+        cameraPosition = QVector3D(gridCenterX, gridCenterY, CAMERA_MAX_HEIGHT);
+        cameraTarget = QVector3D(gridCenterX, gridCenterY, 0.0f);
+        const float gridWorldWidth = grid->getWidth() * grid->getCellSize();
+        const float gridWorldHeight = grid->getHeight() * grid->getCellSize();
+        cameraZoom = std::max(gridWorldWidth, gridWorldHeight) * 0.6f;
+    } else { // Orbit mode
+        cameraTarget = QVector3D(gridCenterX, 0.0f, gridCenterY);
+        cameraYaw = -90.0f;
+        cameraPitch = -30.0f;
+        cameraZoom = 150.0f;
+    }
+    updateProjectionMatrix();
     setupCamera();
+}
+
+void OpenGLRenderer::setupCamera() {
+    viewMatrix.setToIdentity();
+    if (cameraMode == CameraMode::TopDown) {
+        viewMatrix.lookAt(cameraPosition, cameraTarget, QVector3D(0.0F, 1.0F, 0.0F));
+    } else { // Orbit
+        QVector3D direction;
+        direction.setX(cos(qDegreesToRadians(cameraYaw)) * cos(qDegreesToRadians(cameraPitch)));
+        direction.setY(sin(qDegreesToRadians(cameraPitch)));
+        direction.setZ(sin(qDegreesToRadians(cameraYaw)) * cos(qDegreesToRadians(cameraPitch)));
+        cameraPosition = cameraTarget - direction.normalized() * cameraZoom;
+
+        QVector3D up = QVector3D(0.0f, 1.0f, 0.0f);
+        QVector3D right = QVector3D::crossProduct(up, -direction).normalized();
+        up = QVector3D::crossProduct(-direction, right).normalized();
+        viewMatrix.lookAt(cameraPosition, cameraTarget, up);
+    }
+    update();
+}
+
+void OpenGLRenderer::updateProjectionMatrix() {
+    const float aspect = static_cast<float>(width()) / static_cast<float>(height());
+    projectionMatrix.setToIdentity();
+
+    if (cameraMode == CameraMode::TopDown) {
+        float orthoSize = cameraZoom;
+        if (aspect > 1.0f) {
+            projectionMatrix.ortho(-orthoSize * aspect, orthoSize * aspect, -orthoSize, orthoSize, 0.1f, CAMERA_MAX_HEIGHT * 2.0f);
+        } else {
+            projectionMatrix.ortho(-orthoSize, orthoSize, -orthoSize / aspect, orthoSize / aspect, 0.1f, CAMERA_MAX_HEIGHT * 2.0f);
+        }
+    } else { // Orbit
+        projectionMatrix.perspective(45.0f, aspect, 0.1f, 2000.0f);
+    }
 }
 
 void OpenGLRenderer::mousePressEvent(QMouseEvent* event) {
     lastMousePos = event->pos();
     isDragging = true;
 
-    if (event->button() == Qt::LeftButton && !cameraPanEnabled) {
+    if (cameraMode == CameraMode::TopDown && event->button() == Qt::LeftButton) {
         int gridX, gridY;
         if (screenToGridCoords(event->pos().x(), event->pos().y(), gridX, gridY)) {
             paintTool->startContinuousPainting(grid.get(), gridX, gridY);
@@ -148,16 +144,20 @@ void OpenGLRenderer::mouseMoveEvent(QMouseEvent* event) {
     const QPoint delta = event->pos() - lastMousePos;
 
     if (isDragging) {
-        if (cameraPanEnabled) {
+        if (cameraMode == CameraMode::Orbit) {
             if (event->buttons() & Qt::LeftButton) {
-                panCamera(static_cast<float>(delta.x()), static_cast<float>(delta.y()));
+                panCamera(delta.x(), delta.y());
             } else if (event->buttons() & Qt::RightButton) {
-                rotateCamera(static_cast<float>(delta.x()), static_cast<float>(delta.y()));
+                rotateCamera(delta.x(), delta.y());
             }
-        } else if (event->buttons() & Qt::LeftButton) {
-            int gridX, gridY;
-            if (screenToGridCoords(event->pos().x(), event->pos().y(), gridX, gridY)) {
-                paintTool->updatePaintPosition(gridX, gridY);
+        } else { // TopDown
+            if (event->buttons() & Qt::LeftButton) { // Painting
+                int gridX, gridY;
+                if (screenToGridCoords(event->pos().x(), event->pos().y(), gridX, gridY)) {
+                    paintTool->updatePaintPosition(gridX, gridY);
+                }
+            } else if (event->buttons() & Qt::RightButton) { // Panning
+                panCamera(delta.x(), delta.y());
             }
         }
     }
@@ -176,13 +176,12 @@ void OpenGLRenderer::mouseMoveEvent(QMouseEvent* event) {
         hoveredGridX = -1;
         hoveredGridY = -1;
     }
-
     QOpenGLWidget::mouseMoveEvent(event);
 }
 
 void OpenGLRenderer::mouseReleaseEvent(QMouseEvent* event) {
     isDragging = false;
-    if (event->button() == Qt::LeftButton && !cameraPanEnabled) {
+    if (cameraMode == CameraMode::TopDown && event->button() == Qt::LeftButton) {
         paintTool->stopContinuousPainting();
     }
     QOpenGLWidget::mouseReleaseEvent(event);
@@ -190,58 +189,90 @@ void OpenGLRenderer::mouseReleaseEvent(QMouseEvent* event) {
 
 void OpenGLRenderer::wheelEvent(QWheelEvent* event) {
     const float delta = event->angleDelta().y();
+    float zoomFactor = 1.0f - (delta / 1200.0f);
 
-    if (cameraPanEnabled && event->modifiers() & Qt::ShiftModifier) {
+    if (cameraMode == CameraMode::Orbit && event->modifiers() & Qt::ShiftModifier) {
         moveCameraVertical(delta * 0.1f);
     } else {
-        float zoomFactor = 1.0f - (delta / 1200.0f);
         setZoom(cameraZoom * zoomFactor);
     }
     event->accept();
 }
 
+void OpenGLRenderer::panCamera(float deltaX, float deltaY) {
+    if (cameraMode == CameraMode::TopDown) {
+        float sensitivity = cameraZoom * 0.001f;
+        cameraPosition.setX(cameraPosition.x() - deltaX * sensitivity);
+        cameraPosition.setY(cameraPosition.y() + deltaY * sensitivity);
+        cameraTarget.setX(cameraTarget.x() - deltaX * sensitivity);
+        cameraTarget.setY(cameraTarget.y() + deltaY * sensitivity);
+    } else { // Orbit
+        float sensitivity = 0.002f * cameraZoom;
+        QVector3D forward = cameraTarget - cameraPosition;
+        forward.setY(0);
+        forward.normalize();
+        QVector3D right = QVector3D::crossProduct(forward, QVector3D(0,1,0));
+        cameraTarget -= right * deltaX * sensitivity;
+        cameraTarget += forward * deltaY * sensitivity;
+    }
+    setupCamera();
+}
+
+void OpenGLRenderer::rotateCamera(float yawDelta, float pitchDelta) {
+    cameraYaw += yawDelta * 0.4f;
+    cameraPitch -= pitchDelta * 0.4f;
+    cameraPitch = std::max(-89.0f, std::min(89.0f, cameraPitch));
+    setupCamera();
+}
+
+void OpenGLRenderer::moveCameraVertical(float delta) {
+    float sensitivity = 0.005f * cameraZoom;
+    cameraTarget.setY(cameraTarget.y() + delta * sensitivity);
+    setupCamera();
+}
+
+void OpenGLRenderer::setZoom(float zoom) {
+    if (cameraMode == CameraMode::TopDown) {
+        cameraZoom = std::max(CAMERA_ZOOM_MIN_ORTHO, std::min(CAMERA_ZOOM_MAX_ORTHO, zoom));
+    } else {
+        cameraZoom = std::max(CAMERA_ZOOM_MIN_PERSP, std::min(CAMERA_ZOOM_MAX_PERSP, zoom));
+    }
+    updateProjectionMatrix();
+    setupCamera();
+}
+
 bool OpenGLRenderer::screenToGridCoords(const int screenX, const int screenY, int& gridX, int& gridY) const {
     if (!grid) return false;
 
-    QVector3D nearPoint = QVector3D(screenX, height() - screenY, 0.0f).unproject(viewMatrix, projectionMatrix, QRect(0, 0, width(), height()));
-    QVector3D farPoint = QVector3D(screenX, height() - screenY, 1.0f).unproject(viewMatrix, projectionMatrix, QRect(0, 0, width(), height()));
-    QVector3D direction = (farPoint - nearPoint).normalized();
+    if (cameraMode == CameraMode::TopDown) {
+        const float ndcX = (2.0f * screenX) / width() - 1.0f;
+        const float ndcY = 1.0f - (2.0f * screenY) / height();
+        const QMatrix4x4 invViewProj = (projectionMatrix * viewMatrix).inverted();
+        QVector4D worldPos = invViewProj * QVector4D(ndcX, ndcY, 0.0, 1.0);
+        if (worldPos.w() == 0.0f) return false;
+        worldPos /= worldPos.w();
 
-    float minT = 0.0f;
-    float maxT = 2000.0f;
-    const int iterations = 20;
+        const float cellSize = grid->getCellSize();
+        gridX = static_cast<int>(qFloor(worldPos.x() / cellSize));
+        gridY = static_cast<int>(qFloor(worldPos.y() / cellSize));
+    } else { // Orbit - Raycasting on Y=0 plane
+        QVector3D nearPoint = QVector3D(screenX, height() - screenY, 0.0f).unproject(viewMatrix, projectionMatrix, QRect(0, 0, width(), height()));
+        QVector3D farPoint = QVector3D(screenX, height() - screenY, 1.0f).unproject(viewMatrix, projectionMatrix, QRect(0, 0, width(), height()));
+        QVector3D direction = (farPoint - nearPoint).normalized();
 
-    float intersectionT = -1.0f;
+        QVector3D planeNormal(0.0f, 1.0f, 0.0f);
+        QVector3D planePoint(0.0f, 0.0f, 0.0f);
 
-    for (int i = 0; i < iterations; ++i) {
-        float midT = (minT + maxT) / 2.0f;
-        QVector3D testPoint = nearPoint + direction * midT;
+        float denom = QVector3D::dotProduct(direction, planeNormal);
+        if (qAbs(denom) < 1e-6) return false;
+        float t = QVector3D::dotProduct(planePoint - nearPoint, planeNormal) / denom;
+        if (t < 0) return false;
 
-        int testGridX = static_cast<int>(qFloor(testPoint.x() / grid->getCellSize()));
-        int testGridY = static_cast<int>(qFloor(testPoint.z() / grid->getCellSize()));
-
-        if (!grid->isValidPosition(testGridX, testGridY)) {
-            maxT = midT;
-            continue;
-        }
-
-        const Cell* cell = grid->getCell(testGridX, testGridY);
-        float terrainHeight = cell ? cell->getTerrainHeight() : 0.0f;
-
-        if (testPoint.y() > terrainHeight) {
-            minT = midT;
-        } else {
-            maxT = midT;
-            intersectionT = midT;
-        }
+        QVector3D intersectionPoint = nearPoint + t * direction;
+        const float cellSize = grid->getCellSize();
+        gridX = static_cast<int>(qFloor(intersectionPoint.x() / cellSize));
+        gridY = static_cast<int>(qFloor(intersectionPoint.z() / cellSize));
     }
 
-    if (intersectionT > 0.0f) {
-        QVector3D intersectionPoint = nearPoint + direction * intersectionT;
-        gridX = static_cast<int>(qFloor(intersectionPoint.x() / grid->getCellSize()));
-        gridY = static_cast<int>(qFloor(intersectionPoint.z() / grid->getCellSize()));
-        return grid->isValidPosition(gridX, gridY);
-    }
-
-    return false;
+    return grid->isValidPosition(gridX, gridY);
 }

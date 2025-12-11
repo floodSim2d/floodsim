@@ -11,17 +11,24 @@
 
 #include "../Simulation/Tools/PaintTool.h"
 
-constexpr float CAMERA_ZOOM_MAX = 200.0F;
-constexpr float CAMERA_ZOOM_MIN = 5.0F;
+constexpr float CAMERA_ZOOM_MAX_ORTHO = 200.0F;
+constexpr float CAMERA_ZOOM_MIN_ORTHO = 5.0F;
+constexpr float CAMERA_ZOOM_MAX_PERSP = 200.0F;
+constexpr float CAMERA_ZOOM_MIN_PERSP = 5.0F;
 constexpr float CAMERA_MAX_HEIGHT = 1000.0F;
 
 class Cell;
 class Grid;
 
+enum class CameraMode {
+    TopDown, // Orthographic, for editing
+    Orbit    // Perspective, for navigation
+};
+
 class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
     Q_OBJECT
 
-   public:
+public:
     explicit OpenGLRenderer(QWidget* parent = nullptr);
     ~OpenGLRenderer() override;
 
@@ -29,24 +36,21 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
     Grid* getGrid() const { return grid.get(); }
 
     // Camera control
-    void setZoom(float zoom);
+    void setCameraMode(CameraMode mode);
+    CameraMode getCameraMode() const { return cameraMode; }
     void resetCamera();
-    void setCameraPanEnabled(bool enabled);
-    bool isCameraPanEnabled() const { return cameraPanEnabled; }
-    void rotateCamera(float yawDelta, float pitchDelta);
-    void panCamera(float deltaX, float deltaY);
-    void moveCameraVertical(float delta);
+    void setCameraPanEnabled(bool enabled); // Kept for compatibility with MainWindow logic
+    bool isCameraPanEnabled() const;
 
 
     // Paint tool
     auto getPaintTool() const -> PaintTool* { return paintTool; }
 
-   signals:
+signals:
     void cellHovered(int gridX, int gridY, const Cell& cell);
     void cellClicked(int gridX, int gridY);
-    void cameraPanToggled(bool enabled);
 
-   protected:
+protected:
     void initializeGL() override;
     void resizeGL(int width, int height) override;
     void paintGL() override;
@@ -56,10 +60,16 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
     void mouseReleaseEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
 
-   private:
+private:
     void setupCamera();
     void updateProjectionMatrix();
     bool screenToGridCoords(int screenX, int screenY, int& gridX, int& gridY) const;
+
+    // Camera actions
+    void panCamera(float deltaX, float deltaY);
+    void rotateCamera(float yawDelta, float pitchDelta);
+    void moveCameraVertical(float delta);
+    void setZoom(float zoom);
 
     // Grid
     std::unique_ptr<Grid> grid;
@@ -69,6 +79,7 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
     QMatrix4x4 viewMatrix;
 
     // Camera state
+    CameraMode cameraMode;
     float cameraZoom;
     QVector3D cameraPosition;
     QVector3D cameraTarget;
@@ -83,7 +94,6 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
 
     // Paint tool
     PaintTool* paintTool;
-    bool cameraPanEnabled;
 };
 
 #endif  // FLOODSIM_OPENGLRENDERER_H
