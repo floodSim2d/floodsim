@@ -11,8 +11,8 @@
 
 #include "../Simulation/Tools/PaintTool.h"
 
-constexpr float CAMERA_ZOOM_MAX = 100.0F;
-constexpr float CAMERA_ZOOM_MIN = 10.0F;
+constexpr float CAMERA_ZOOM_MAX = 200.0F;
+constexpr float CAMERA_ZOOM_MIN = 5.0F;
 constexpr float CAMERA_MAX_HEIGHT = 1000.0F;
 
 class Cell;
@@ -33,7 +33,10 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
     void resetCamera();
     void setCameraPanEnabled(bool enabled);
     bool isCameraPanEnabled() const { return cameraPanEnabled; }
-    void updateProjectionMatrix();
+    void rotateCamera(float yawDelta, float pitchDelta);
+    void panCamera(float deltaX, float deltaY);
+    void moveCameraVertical(float delta);
+
 
     // Paint tool
     auto getPaintTool() const -> PaintTool* { return paintTool; }
@@ -55,9 +58,8 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
 
    private:
     void setupCamera();
+    void updateProjectionMatrix();
     bool screenToGridCoords(int screenX, int screenY, int& gridX, int& gridY) const;
-    void rotateCamera(float deltaX);
-    void moveCameraUpDown(float deltaY);
 
     // Grid
     std::unique_ptr<Grid> grid;
@@ -70,6 +72,8 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
     float cameraZoom;
     QVector3D cameraPosition;
     QVector3D cameraTarget;
+    float cameraYaw;
+    float cameraPitch;
 
     // Mouse interaction
     QPoint lastMousePos;
