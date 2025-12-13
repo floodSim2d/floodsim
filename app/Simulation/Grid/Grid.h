@@ -37,7 +37,7 @@ class Grid {
     void saveHeightmap(const QString& filename) const;
     void loadHeightmap(const QString& filename);
     void clearHeightmap(const Cell& defaultCell = Cell());
-    void updateHeightTexture() const;
+    void updateHeightTexture();
 
     // utils
     bool isValidPosition(int x, int y) const;
@@ -55,6 +55,14 @@ class Grid {
     QOpenGLBuffer* indexBuffer;   // EBO
     QOpenGLVertexArrayObject* VAO;
     QOpenGLTexture* heightTexture;
+
+    // PBO for async texture uploads (double buffering)
+    QOpenGLBuffer* pbo[2];
+    int currentPboIndex;
+    size_t pboSize;
+
+    void createPBOs();
+    void destroyPBOs();
 
     // grid data
     unsigned int width;

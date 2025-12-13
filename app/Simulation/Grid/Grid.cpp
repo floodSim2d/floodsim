@@ -9,6 +9,9 @@ Grid::Grid(const int width, const int height, const float cellSize, const float 
       indexBuffer(nullptr),
       VAO(nullptr),
       heightTexture(nullptr),
+      pbo{nullptr, nullptr},
+      currentPboIndex(0),
+      pboSize(0),
       width(width),
       height(height),
       cellSize(cellSize),
@@ -19,6 +22,8 @@ Grid::Grid(const int width, const int height, const float cellSize, const float 
 }
 
 Grid::~Grid() {
+    destroyPBOs();
+
     VAO->destroy();
     indexBuffer->destroy();
     vertexBuffer->destroy();
@@ -36,6 +41,7 @@ void Grid::initialize(QOpenGLFunctions* gl_context) {
 
     createShaders();
     createMesh();
+    createPBOs();
     createHeightTexture();
 
     // Create realistic terrain with land, water, hills, and valleys
@@ -182,6 +188,32 @@ void Grid::createMesh() {
     VAO->release();
 }
 
+void Grid::createPBOs() {
+    pboSize = static_cast<size_t>(width) * height * 3 * sizeof(float); // 3 values per cell
+
+    // 2 pbos for double buffering
+    for (auto & i : pbo) {
+        i = new QOpenGLBuffer(QOpenGLBuffer::PixelUnpackBuffer);
+        i->create();
+        i->bind();
+        i->setUsagePattern(QOpenGLBuffer::StreamDraw);
+        i->allocate(static_cast<int>(pboSize));
+        i->release();
+    }
+
+    currentPboIndex = 0;
+}
+
+void Grid::destroyPBOs() {
+    for (int i = 0; i < 2; i++) {
+        if (pbo[i] != nullptr) {
+            pbo[i]->destroy();
+            delete pbo[i];
+            pbo[i] = nullptr;
+        }
+    }
+}
+
 void Grid::createHeightTexture() {
     if (heightTexture != nullptr) {
         heightTexture->destroy();
@@ -201,30 +233,50 @@ void Grid::createHeightTexture() {
     updateHeightTexture();
 }
 
-void Grid::updateHeightTexture() const {
+void Grid::updateHeightTexture(){
     if (heightTexture == nullptr) {
         qDebug() << "heightTexture is null";
         return;
     }
-
-    // Extract height values from Cell objects into a flat array
-    // Format: RGB32F where R = obstacle flag, G = terrain height, B = water depth
-    // TODO: if possible optimize to avoid allocation each time
-    std::vector<float> textureData(width * height * 3);
-    for (unsigned int i = 0; i < heightMap.size(); i++) {
-        textureData[i * 3 + 0] = heightMap[i].getType() == OBSTACLE ? 1.0F : 0.0F;
-        textureData[i * 3 + 1] = heightMap[i].getTerrainHeight();
-        textureData[i * 3 + 2] = heightMap[i].getWaterDepth();
+    if (pbo[0] == nullptr) {
+        qDebug() << "PBOs not created";
+        return;
     }
 
+
+    // double buffering: use one PBO for upload while filling the other
+    const int nextPboIndex = (currentPboIndex + 1) % 2;
+
     heightTexture->bind();
-
-    // Set pixel alignment for proper texture upload on macOS
     glContext->glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glContext->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGB, GL_FLOAT, textureData.data());
-    glContext->glPixelStorei(GL_UNPACK_ALIGNMENT, 4); // Restore default
 
+    // bind PBO that was filled in previous frame and upload to texture
+    pbo[currentPboIndex]->bind();
+    glContext->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                                width, height,
+                                GL_RGB, GL_FLOAT, nullptr); // nullptr = read from PBO
+    pbo[currentPboIndex]->release();
+
+    // bind next PBO and map it for writing
+    pbo[nextPboIndex]->bind();
+    pbo[nextPboIndex]->allocate(static_cast<int>(pboSize));
+    auto* ptr = static_cast<float*>(pbo[nextPboIndex]->map(QOpenGLBuffer::WriteOnly));
+
+    if (ptr != nullptr) {
+        for (unsigned int i = 0; i < heightMap.size(); i++) {
+            ptr[i * 3 + 0] = heightMap[i].getType() == OBSTACLE ? 1.0F : 0.0F;
+            ptr[i * 3 + 1] = heightMap[i].getTerrainHeight();
+            ptr[i * 3 + 2] = heightMap[i].getWaterDepth();
+        }
+        pbo[nextPboIndex]->unmap();
+    }
+
+    pbo[nextPboIndex]->release();
+    glContext->glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
     heightTexture->release();
+
+   // swap buffers for next frame
+    currentPboIndex = nextPboIndex;
 }
 
 void Grid::render(const QMatrix4x4& projection, const QMatrix4x4& view) const {
