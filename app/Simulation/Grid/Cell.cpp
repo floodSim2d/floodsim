@@ -53,6 +53,16 @@ void Cell::setType(CellType type) {
                 terrainHeight = 1.0F;
             }
             break;
+        case WATER_SOURCE:
+            waterSource = true;
+            obstacle = false;
+            river = false;
+
+            // Ensure water source has some initial water
+            if (waterDepth < 0.1F) {
+                waterDepth = 1.0F;
+            }
+            break;
         case EMPTY:
             obstacle = false;
             river = false;

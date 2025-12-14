@@ -22,11 +22,11 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
     Q_OBJECT
 
    public:
-    explicit OpenGLRenderer(QWidget* parent = nullptr);
-    ~OpenGLRenderer() override;
+    explicit OpenGLRenderer(Grid* grid, QWidget* parent = nullptr);
+    ~OpenGLRenderer() override = default;
 
     // Grid access
-    Grid* getGrid() const { return grid.get(); }
+    auto getGrid() const -> Grid* { return grid; }
 
     // Camera control
     void setZoom(float zoom);
@@ -37,6 +37,7 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
     void updateProjectionMatrix();
 
     // Paint tool
+    void setPaintTool(PaintTool* tool) { paintTool = tool; }
     auto getPaintTool() const -> PaintTool* { return paintTool; }
 
    signals:
@@ -59,7 +60,7 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
     bool screenToGridCoords(int screenX, int screenY, int& gridX, int& gridY) const;
 
     // Grid
-    std::unique_ptr<Grid> grid;
+    Grid* grid;
 
     // Camera/View matrices
     QMatrix4x4 projectionMatrix;

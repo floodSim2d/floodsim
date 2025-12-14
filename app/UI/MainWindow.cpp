@@ -14,17 +14,32 @@
 #include <QWidget>
 
 #include "../Simulation/Grid/Grid.h"
+#include "../Simulation/FlowModel/FlowModel.h"
+#include "../Simulation/Tools/PaintTool.h"
 #include "../Renderer/OpenGLRenderer.h"
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent), renderer(nullptr), heightLabel(nullptr)
+    : QMainWindow(parent),
+      grid(std::make_unique<Grid>(200, 200, 1.0F, DEFAULT_WATER_DEPTH)),
+      flowModel(nullptr),
+      paintTool(std::make_unique<PaintTool>(this)),
+      renderer(nullptr),
+      heightLabel(nullptr)
 {
-    renderer = new OpenGLRenderer();
+    renderer = new OpenGLRenderer(grid.get(), this);
+
+    renderer->setPaintTool(paintTool.get());
+
+    flowModel = std::make_unique<FlowModel>(grid.get(), this);
+
+    // when paint tool applies paint we update the renderer to reflect changes
+    connect(paintTool.get(), &PaintTool::paintApplied, renderer, QOverload<>::of(&QWidget::update));
 
     setWindowTitle("FloodSim — Symulator powodzi 2D");
     setupMenuBar();
     setupToolBar();
     setupStatusBar();
+    connectFlowModelSignals();
 
     auto *central = new QWidget(this);
     setCentralWidget(central);
@@ -44,8 +59,33 @@ MainWindow::MainWindow(QWidget *parent)
     mainLayout->addWidget(right);
 }
 
+MainWindow::~MainWindow() {
+    // cleanup opengl resources used in grid first
+    renderer->makeCurrent();
+    grid->~Grid();
+    renderer->doneCurrent();
+    delete renderer;
+}
+
+void MainWindow::connectFlowModelSignals() {
+    connect(flowModel.get(), &FlowModel::simulationStarted, this, [this]() {
+        statusBar()->showMessage("Symulacja uruchomiona");
+    });
+
+    connect(flowModel.get(), &FlowModel::simulationPaused, this, [this]() {
+        statusBar()->showMessage("Symulacja wstrzymana");
+    });
+
+    connect(flowModel.get(), &FlowModel::simulationStopped, this, [this]() {
+        statusBar()->showMessage("Symulacja zatrzymana");
+    });
+
+    connect(flowModel.get(), &FlowModel::stepCompleted, this, [this]() {
+        renderer->update();
+    });
+}
+
 void MainWindow::setupMenuBar() {
-    // widok
     QMenu* viewMenu = menuBar()->addMenu("&Widok");
     QAction* resetCameraAction = viewMenu->addAction("Resetuj kamerę");
 
@@ -69,12 +109,12 @@ void MainWindow::setupMenuBar() {
         );
 
         if (!path.isEmpty()) {
-            auto const widthBefore = renderer->getGrid()->getWidth();
-            auto const heightBefore = renderer->getGrid()->getHeight();
+            auto const widthBefore = grid->getWidth();
+            auto const heightBefore = grid->getHeight();
 
-            renderer->getGrid()->loadHeightmap(path);
+            grid->loadHeightmap(path);
             // reset camera if grid size changed
-            if (renderer->getGrid()->getWidth() != widthBefore || renderer->getGrid()->getHeight() != heightBefore) {
+            if (grid->getWidth() != widthBefore || grid->getHeight() != heightBefore) {
                 renderer->resetCamera();
             }
         }
@@ -87,13 +127,13 @@ void MainWindow::setupMenuBar() {
         );
 
         if (!path.isEmpty()) {
-            renderer->getGrid()->saveHeightmap(path);
+            grid->saveHeightmap(path);
         }
     });
 
     // nowa mapa
     connect(newAct, &QAction::triggered, this, [this]() {
-        renderer->getGrid()->clearHeightmap();
+        grid->clearHeightmap();
     });
 }
 
@@ -140,14 +180,23 @@ void MainWindow::setupToolBar() {
     });
 
     connect(resetAction, &QAction::triggered, this, [this]() {
-       statusBar()->showMessage("Symulacja zresetowana");
-   });
+        flowModel->stop();
+        grid->clearHeightmap();
+        statusBar()->showMessage("Symulacja zresetowana");
+    });
 
-    connect(playAction, &QAction::triggered, this, [this]() { statusBar()->showMessage("Symulacja uruchomiona"); });
+    connect(playAction, &QAction::triggered, this, [this]() {
+        flowModel->play();
+    });
 
-    connect(pauseAction, &QAction::triggered, this, [this]() { statusBar()->showMessage("Symulacja zatrzymana"); });
+    connect(pauseAction, &QAction::triggered, this, [this]() {
+        flowModel->pause();
+    });
 
-    connect(stepAction, &QAction::triggered, this, [this]() { statusBar()->showMessage("Krok symulacji"); });
+    connect(stepAction, &QAction::triggered, this, [this]() {
+        flowModel->step();
+        statusBar()->showMessage("Krok symulacji wykonany");
+    });
 
 }
 
@@ -222,7 +271,7 @@ QWidget* MainWindow::setupLeftPanel() {
     layout->addStretch();
 
     connect(brushSizeSlider, &QSlider::valueChanged, this, [this, brushSizeValueLabel](int value) {
-        renderer->getPaintTool()->setBrushSize(value);
+        paintTool->setBrushSize(value);
         brushSizeValueLabel->setText(QString::number(value));
     });
 
@@ -238,7 +287,7 @@ QWidget* MainWindow::setupLeftPanel() {
                             btn.button->setChecked(false);
                         }
                     }
-                    renderer->getPaintTool()->setToolType(ToolType::Camera);
+                    paintTool->setToolType(ToolType::Camera);
                     statusBar()->showMessage(toolBtn.message);
                 }
             });
@@ -249,7 +298,7 @@ QWidget* MainWindow::setupLeftPanel() {
                 toolButtons[0].button->setChecked(false);
                 renderer->setCameraPanEnabled(false);
 
-                renderer->getPaintTool()->setToolType(currentTool.type);
+                paintTool->setToolType(currentTool.type);
 
                 for (const auto& btn : toolButtons) {
                     btn.button->setChecked(btn.button == currentTool.button);
@@ -311,18 +360,15 @@ QWidget* MainWindow::setupRightPanel() {
     connect(apply, &QPushButton::clicked, this, [this, spinK, depthSlider]() {
         // Apply K value
         const auto kValue = static_cast<float>(spinK->value());
+        flowModel->setFlowCoefficient(kValue);
 
         // Apply maxDepth value
         const auto newDepth = static_cast<float>(depthSlider->value());
+        grid->setMaxDepth(newDepth);
+        renderer->updateProjectionMatrix();
 
-        auto* grid = renderer->getGrid();
-
-        if (grid != nullptr) {
-            grid->setMaxDepth(newDepth);
-            renderer->updateProjectionMatrix();
-            statusBar()->showMessage(QString("Parametry zastosowane: K=%1, Max głębokość=%2")
+        statusBar()->showMessage(QString("Parametry zastosowane: K=%1, Max głębokość=%2")
             .arg(kValue, 0, 'f', 2).arg(newDepth, 0, 'f', 1));
-        }
     });
 
     return panel;

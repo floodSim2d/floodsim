@@ -84,13 +84,14 @@ void PaintTool::applySingleCell(Cell* cell) const {
             break;
 
         case ToolType::WaterSource:
-            cell->setType(WATER_SOURCE);
+            if (cell->getType() != WATER_SOURCE) {
+                cell->setType(WATER_SOURCE);
+            }
             // Always add water when painting - water can exceed river capacity (overflow/flood)
             cell->setWaterDepth(cell->getWaterDepth() + 0.5F);
             break;
 
         case ToolType::Eraser:
-            // Reset cell to default
             *cell = Cell();
             break;
 
@@ -123,7 +124,7 @@ void PaintTool::updatePaintPosition(int gridX, int gridY) {
     currentPaintGridY = gridY;
 
     // Apply immediately when position updates
-    if (isContinuousPainting && currentGrid) {
+    if (isContinuousPainting && currentGrid != nullptr) {
         applyTool(currentGrid, gridX, gridY);
         emit paintApplied();
     }
@@ -136,7 +137,7 @@ void PaintTool::stopContinuousPainting() {
 }
 
 void PaintTool::applyPaintAtCurrentPosition() {
-    if (!isContinuousPainting || !currentGrid) {
+    if (!isContinuousPainting || currentGrid == nullptr) {
         return;
     }
 

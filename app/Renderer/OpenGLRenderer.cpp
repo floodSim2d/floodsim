@@ -6,26 +6,18 @@
 #include "../Simulation/Grid/Grid.h"
 #include "../Simulation/Grid/Cell.h"
 
-OpenGLRenderer::OpenGLRenderer(QWidget* parent)
+OpenGLRenderer::OpenGLRenderer(Grid* grid, QWidget* parent)
     : QOpenGLWidget(parent),
-      grid(nullptr),
+      grid(grid),
       cameraZoom(CAMERA_ZOOM_MAX),
       cameraPosition(0.0F, 0.0F, CAMERA_MAX_HEIGHT),
       cameraTarget(0.0F, 0.0F, 0.0F),
       isDragging(false),
       hoveredGridX(-1),
       hoveredGridY(-1),
-      paintTool(new PaintTool(this)),
+      paintTool(nullptr),
       cameraPanEnabled(false) {
     setMouseTracking(true);
-
-    connect(paintTool, &PaintTool::paintApplied, this, QOverload<>::of(&QWidget::update));
-}
-
-OpenGLRenderer::~OpenGLRenderer() {
-    makeCurrent();
-    grid.reset();
-    doneCurrent();
 }
 
 void OpenGLRenderer::initializeGL() {
@@ -41,14 +33,16 @@ void OpenGLRenderer::initializeGL() {
     qDebug() << "Renderer:" << reinterpret_cast<const char*>(glGetString(GL_RENDERER));
     qDebug() << "Version:" << reinterpret_cast<const char*>(glGetString(GL_VERSION));
 
-    grid = std::make_unique<Grid>(200, 200, 1.0F, DEFAULT_WATER_DEPTH);
-    grid->initialize(this);
+    // Initialize grid if it exists (injected from MainWindow)
+    if (grid != nullptr) {
+        grid->initialize(this);
 
-    // Center camera on grid - position directly above for top-down view
-    const float gridCenterX = static_cast<float>(grid->getWidth()) * grid->getCellSize() * 0.5F;
-    const float gridCenterY = static_cast<float>(grid->getHeight()) * grid->getCellSize() * 0.5F;
-    cameraPosition = QVector3D(gridCenterX, gridCenterY, CAMERA_MAX_HEIGHT);
-    cameraTarget = QVector3D(gridCenterX, gridCenterY, 0.0F);
+        // Center camera on grid - position directly above for top-down view
+        const float gridCenterX = static_cast<float>(grid->getWidth()) * grid->getCellSize() * 0.5F;
+        const float gridCenterY = static_cast<float>(grid->getHeight()) * grid->getCellSize() * 0.5F;
+        cameraPosition = QVector3D(gridCenterX, gridCenterY, CAMERA_MAX_HEIGHT);
+        cameraTarget = QVector3D(gridCenterX, gridCenterY, 0.0F);
+    }
 
     // Set initial zoom to show entire grid (use the larger dimension)
     const float gridWorldWidth = static_cast<float>(grid->getWidth()) * grid->getCellSize();
@@ -90,11 +84,11 @@ void OpenGLRenderer::updateProjectionMatrix() {
     // Near plane should be close to camera, far plane should be beyond the lowest terrain
     const float maxDepth = grid ? grid->getMaxDepth() : DEFAULT_WATER_DEPTH;
 
-    // Near plane: distance from camera to highest point we want to see
+    // Near plane: distance from camera to the highest point we want to see
     // (small positive value means just in front of camera)
     const float nearPlane = 0.1F;
 
-    // Far plane: distance from camera to lowest point we want to see
+    // Far plane: distance from camera to the lowest point we want to see
     // Camera is at CAMERA_MAX_HEIGHT, terrain can go down to -maxDepth
     // So we need to see from camera height down to -maxDepth below z=0
     const float farPlane = CAMERA_MAX_HEIGHT + maxDepth;
@@ -167,13 +161,12 @@ void OpenGLRenderer::mousePressEvent(QMouseEvent* event) {
         int gridY;
         if (screenToGridCoords(event->pos().x(), event->pos().y(), gridX, gridY)) {
             // If paint tool is active, start continuous painting
-            if (paintTool->getToolType() != ToolType::Camera) {
-                paintTool->startContinuousPainting(grid.get(), gridX, gridY);
+            if (paintTool != nullptr && paintTool->getToolType() != ToolType::Camera) {
+                paintTool->startContinuousPainting(grid, gridX, gridY);
             }
             emit cellClicked(gridX, gridY);
         }
     }
-
     QOpenGLWidget::mousePressEvent(event);
 }
 
@@ -185,9 +178,10 @@ void OpenGLRenderer::mouseMoveEvent(QMouseEvent* event) {
             const QPoint delta = event->pos() - lastMousePos;
             panCamera(static_cast<float>(delta.x()), static_cast<float>(delta.y()));
             lastMousePos = event->pos();
-        } else if (paintTool->getToolType() != ToolType::Camera) {
+        } else if (paintTool != nullptr && paintTool->getToolType() != ToolType::Camera) {
             // Paint mode - update current position for continuous painting
-            int gridX, gridY;
+            int gridX;
+            int gridY;
             if (screenToGridCoords(event->pos().x(), event->pos().y(), gridX, gridY)) {
                 paintTool->updatePaintPosition(gridX, gridY);
             }
@@ -218,7 +212,9 @@ void OpenGLRenderer::mouseMoveEvent(QMouseEvent* event) {
 void OpenGLRenderer::mouseReleaseEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
         isDragging = false;
-        paintTool->stopContinuousPainting();
+        if (paintTool != nullptr) {
+            paintTool->stopContinuousPainting();
+        }
     }
 
     QOpenGLWidget::mouseReleaseEvent(event);
