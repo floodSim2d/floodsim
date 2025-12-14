@@ -10,6 +10,8 @@ add_executable(floodsim
         Simulation/Grid/Cell.h
         Simulation/Tools/PaintTool.h
         Simulation/Tools/PaintTool.cpp
+        Simulation/FlowModel/FlowModel.h
+        Simulation/FlowModel/FlowModel.cpp
 )
 
 target_link_libraries(floodsim PRIVATE
