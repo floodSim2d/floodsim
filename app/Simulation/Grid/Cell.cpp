@@ -122,7 +122,6 @@ void Cell::resetWater() {
 }
 
 // stream operator overloads for data serialization
-
 auto operator<<(QDataStream& stream, const Cell& cell) -> QDataStream& {
     stream << cell.terrainHeight;
     stream << cell.waterDepth;

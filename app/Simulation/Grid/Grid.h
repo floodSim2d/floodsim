@@ -35,13 +35,13 @@ class Grid {
     void setMaxDepth(const float depth) { maxDepth = depth; }
 
     void saveHeightmap(const QString& filename) const;
-    void loadHeightmap(const QString& filename);
+    [[nodiscard]] bool loadHeightmap(const QString& filename);
     void clearHeightmap(const Cell& defaultCell = Cell());
     void updateHeightTexture();
 
     // utils
-    bool isValidPosition(int x, int y) const;
-    QVector2D worldPosToGrid(const QVector2D& worldPos) const;
+    [[nodiscard]] bool isValidPosition(int x, int y) const;
+    [[nodiscard]] QVector2D worldPosToGrid(const QVector2D& worldPos) const;
 
    private:
     void createMesh();
@@ -63,6 +63,8 @@ class Grid {
 
     void createPBOs();
     void destroyPBOs();
+
+    void rollbackToSize(unsigned int originalWidth, unsigned int originalHeight, bool recreateTexture);
 
     // grid data
     unsigned int width;

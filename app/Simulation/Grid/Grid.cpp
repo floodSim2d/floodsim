@@ -348,38 +348,97 @@ void Grid::saveHeightmap(const QString& filename) const {
     file.close();
 }
 
-void Grid::loadHeightmap(const QString& filename) {
+void Grid::rollbackToSize(unsigned int originalWidth,unsigned int originalHeight, bool recreateTexture) {
+    width = originalWidth;
+    height = originalHeight;
+    heightMap.resize(width * height);
+    std::ranges::fill(heightMap, Cell());
+
+    if (recreateTexture) {
+        createPBOs();
+        createHeightTexture();
+    }
+}
+
+auto Grid::loadHeightmap(const QString& filename) -> bool {
     QFile file(filename);
     if (!file.open(QIODevice::ReadOnly)) {
         qDebug() << "Could not open file for reading:" << filename;
-        return;
+        return false;
     }
 
-    QDataStream stream(&file);
-    int file_width;
-    int file_height;
-    stream >> file_width >> file_height;
-    const bool needResize = file_width != width || file_height != height;
-    if (needResize) {
-        width = file_width;
-        height = file_height;
-        heightMap.resize(width * height);
-        if (heightTexture != nullptr) {
-            delete heightTexture;
-            heightTexture = nullptr;
+    // store original state for rollback on failure
+    const unsigned int originalWidth = width;
+    const unsigned int originalHeight = height;
+    bool textureWasDestroyed = false;
+
+    try {
+        QDataStream stream(&file);
+
+        int file_width = 0;
+        int file_height = 0;
+        stream >> file_width >> file_height;
+
+        // validate dimensions
+        if (file_width <= 0 || file_height <= 0 ||
+            file_width > 10000 || file_height > 10000) {
+            file.close();
+            qDebug() << "Invalid file dimensions:" << file_width << "x" << file_height;
+            return false;
         }
-    }
 
-    for (auto &cell : heightMap) {
-        stream >> cell;
-    }
+        const bool needResize = file_width != static_cast<int>(width) ||
+                                file_height != static_cast<int>(height);
+        if (needResize) {
+            width = file_width;
+            height = file_height;
+            heightMap.resize(width * height);
+            destroyPBOs();
+            if (heightTexture != nullptr) {
+                heightTexture->destroy();
+                delete heightTexture;
+                heightTexture = nullptr;
+                textureWasDestroyed = true;
+            }
+        }
 
-    if (needResize) {
-        createHeightTexture();
-    } else {
-        updateHeightTexture();
+        for (auto &cell : heightMap) {
+            if (stream.atEnd()) {
+                qDebug() << "Unexpected end of file while reading cells";
+                file.close();
+                rollbackToSize(originalWidth, originalHeight, true);
+                return false;
+            }
+            stream >> cell;
+
+            if (stream.status() != QDataStream::Ok) {
+                qDebug() << "Error reading cell data from file";
+                file.close();
+                rollbackToSize(originalWidth, originalHeight, true);
+                return false;
+            }
+        }
+
+        if (needResize) {
+            createPBOs();
+            createHeightTexture();
+        } else {
+            updateHeightTexture();
+        }
+        file.close();
+        return true;
+
+    } catch (const std::exception& e) {
+        qDebug() << "Exception while loading heightmap:" << e.what();
+        file.close();
+        rollbackToSize(originalWidth, originalHeight, textureWasDestroyed);
+        return false;
+    } catch (...) {
+        qDebug() << "Unknown exception while loading heightmap";
+        file.close();
+        rollbackToSize(originalWidth, originalHeight, textureWasDestroyed);
+        return false;
     }
-    file.close();
 }
 
 void Grid::clearHeightmap(const Cell& defaultCell) {

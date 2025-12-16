@@ -9,3 +9,4 @@
 - [ ] dodać jakieś ikonki do przycisków
 - [ ] ogarnąć jakąś instrukcję obsługi
 - [ ] refactor tego w jaki sposób przesyłamy dane o komórce do shadera, sama tekstura może mieć maks 4 kanały RGBA, ale komórka ma o wiele więcej informacji. Trzeba albo zrobić to jako SSBO albo po prostu VBO z danymi komórek i w shadere odczytywać z tego VBO
+- [ ] refactor MainWindow. Rozbić każdy panel na osobną klasę i w konstruktorze MainWindow tylko je inicjalizować i ustawiać layout

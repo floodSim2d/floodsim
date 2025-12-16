@@ -5,6 +5,7 @@
 #include <QGroupBox>
 #include <QLabel>
 #include <QMenuBar>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QSlider>
 #include <QSpinBox>
@@ -112,11 +113,19 @@ void MainWindow::setupMenuBar() {
             auto const widthBefore = grid->getWidth();
             auto const heightBefore = grid->getHeight();
 
-            grid->loadHeightmap(path);
+            if (!grid->loadHeightmap(path)) {
+                QMessageBox::warning(this, "Błąd wczytywania",
+                    "Nie udało się wczytać pliku mapy.\n\n"
+                    "Plik może być uszkodzony lub mieć nieprawidłowy format.");
+                statusBar()->showMessage("Błąd wczytywania pliku");
+                return;
+            }
+
             // reset camera if grid size changed
             if (grid->getWidth() != widthBefore || grid->getHeight() != heightBefore) {
                 renderer->resetCamera();
             }
+            statusBar()->showMessage(QString("Wczytano mapę: %1").arg(path));
         }
     });
 
