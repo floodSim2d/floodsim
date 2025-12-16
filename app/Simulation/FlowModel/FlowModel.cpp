@@ -11,7 +11,7 @@ FlowModel::FlowModel(Grid* grid, QObject* parent)
       playing(false),
       dt(0.016f),              // ~60 FPS default
       flowCoefficient(0.5f),   // Moderate flow speed
-      dampingFactor(0.98f),    // Small energy loss (2% per step)
+      dampingFactor(0.999f),   // 0.1% energy loss per step so water doesn't oscillate indefinitely
       updateInterval(16) {     // ~60 FPS
 
     connect(timer, &QTimer::timeout, this, &FlowModel::update);
@@ -72,7 +72,7 @@ void FlowModel::computeFlowStep() {
     const unsigned int height = grid->getHeight();
     const float cellArea = grid->getCellSize() * grid->getCellSize();
 
-    std::fill(flowBuffer.begin(), flowBuffer.end(), FlowData{0.0f, 0.0f});
+    std::ranges::fill(flowBuffer, FlowData{.netFlow=0.0F, .totalOutflow=0.0F});
 
     // calculate flows between all neighboring cells
     for (int y = 0; y < height; ++y) {
@@ -120,8 +120,9 @@ void FlowModel::computeFlowStep() {
         }
     }
 
-    // apply water sources
     applyWaterSources();
+
+    applyRainfall();
 
     // apply flows to cells and update water depths
     for (int y = 0; y < height; ++y) {
@@ -136,19 +137,15 @@ void FlowModel::computeFlowStep() {
 
             float newWaterDepth = cell->getWaterDepth() + flowChange;
 
-            // energy loss due to flow
-            if (flowBuffer[idx].totalOutflow > 0.0F) {
-                newWaterDepth *= dampingFactor;
+            // apply damping based on outflow intensity to prevent oscillations
+            if (flowBuffer[idx].totalOutflow > 0.0F && newWaterDepth > 0.01F) {
+                // Apply damping as a tiny friction, scaled by flow intensity
+                const float flowIntensity = std::min(flowBuffer[idx].totalOutflow / cell->getWaterDepth(), 1.0F);
+                newWaterDepth *= 1.0F - (1.0F - dampingFactor) * flowIntensity;
             }
 
-            // enforce max depth constraint
-            if (cell->getType() == RIVER) {
-                const float capacity = cell->getRiverCapacity();
-                if (newWaterDepth > capacity) {
-                    newWaterDepth = capacity;
-                }
-            }
-
+            // handle river overflow - excess water stays but doesn't count toward capacity check
+            // the water can overflow onto neighboring land cells
             cell->setWaterDepth(std::max(0.0F, newWaterDepth));
         }
     }
@@ -179,7 +176,6 @@ auto FlowModel::calculateOutflow(int x, int y, int nx, int ny) const -> float {
         flow = std::min(flow, std::max(0.0F, availableCapacity));
     }
 
-    // Limit flow by max depth constraint
     const float maxFlow = cell->getWaterDepth();
     flow = std::min(flow, maxFlow);
 
@@ -187,7 +183,9 @@ auto FlowModel::calculateOutflow(int x, int y, int nx, int ny) const -> float {
 }
 
 /*
- * Adds water from water source cells into the flow buffer
+ * Applies water sources - maintains constant water level at source cells
+ * Water sources represent springs, lakes, or other permanent water bodies
+ * They maintain a minimum water level regardless of outflow
  */
 void FlowModel::applyWaterSources() {
     const auto width = grid->getWidth();
@@ -196,12 +194,37 @@ void FlowModel::applyWaterSources() {
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
             const Cell* cell = grid->getCell(x, y);
-            if (cell != nullptr && cell->getType() == WATER_SOURCE) {
-                const int idx = y * width + x;
+            if (cell != nullptr && cell->isWaterSource()) {
+                // water sources maintain a minimum water level
+                // this simulates a spring or lake that has a constant inflow
+                const float minSourceLevel = cell->getSourceStrength();
+                if (cell->getWaterDepth() < minSourceLevel) {
+                    // add water up to the source strength
+                    const float deficit = minSourceLevel - cell->getWaterDepth();
+                    const int idx = y * width + x;
+                    flowBuffer[idx].netFlow += deficit / dt;
+                }
+            }
+        }
+    }
+}
 
-                // water sources add constant water per time step
-                const float sourceFlow = 1.0f * dt; // TODO: make this adjustable, e.g if user paints with water source it adds more water here per simulation step
-                flowBuffer[idx].netFlow += sourceFlow;
+/*
+ * Applies rainfall - adds water to rain areas during simulation
+ * Rain areas add water continuously while the simulation is running
+ */
+void FlowModel::applyRainfall() {
+    const auto width = grid->getWidth();
+    const auto height = grid->getHeight();
+
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            Cell* cell = grid->getCell(x, y);
+            if (cell != nullptr && cell->isRainArea() && cell->canFlowThrough()) {
+                const int idx = y * width + x;
+                // Rain adds water based on intensity
+                const float rainFlow = cell->getRainIntensity();
+                flowBuffer[idx].netFlow += rainFlow;
             }
         }
     }

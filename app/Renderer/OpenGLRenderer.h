@@ -4,9 +4,7 @@
 #include <QMatrix4x4>
 #include <QOpenGLFunctions>
 #include <QOpenGLWidget>
-#include <QTimer>
 #include <QVector3D>
-#include <memory>
 #include <QString>
 
 #include "../Simulation/Tools/PaintTool.h"

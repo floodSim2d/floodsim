@@ -87,8 +87,13 @@ void PaintTool::applySingleCell(Cell* cell) const {
             if (cell->getType() != WATER_SOURCE) {
                 cell->setType(WATER_SOURCE);
             }
-            // Always add water when painting - water can exceed river capacity (overflow/flood)
-            cell->setWaterDepth(cell->getWaterDepth() + 0.5F);
+            cell->setSourceStrength(cell->getSourceStrength() + 0.2F);
+            cell->setWaterDepth(std::max(cell->getWaterDepth(), cell->getSourceStrength()));
+            break;
+
+        case ToolType::Rain:
+            cell->setType(RAIN);
+            cell->setRainIntensity(cell->getRainIntensity() + 0.1F);
             break;
 
         case ToolType::Eraser:

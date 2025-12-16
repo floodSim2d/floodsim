@@ -171,7 +171,10 @@ void MainWindow::setupToolBar() {
             label += QString(" | Rzeka");
         }
         if (cell.getType() == WATER_SOURCE) {
-            label += QString(" | Źródło wody");
+            label += QString(" | Źródło wody (siła: %1)").arg(cell.getSourceStrength(), 0, 'f', 2);
+        }
+        if (cell.isRainArea()) {
+            label += QString(" | Deszcz (intensywność: %1)").arg(cell.getRainIntensity(), 0, 'f', 2);
         }
         if (cell.getWaterDepth() > cell.getRiverCapacity()) {
             label += QString(" | Przelew wody!");
@@ -216,32 +219,33 @@ QWidget* MainWindow::setupLeftPanel() {
     layout->addWidget(new QLabel("Narzędzia:", panel));
     layout->addSpacing(10);
 
-    // Tool button configuration
+    // tool button configuration
     struct ToolButton {
         QPushButton* button;
         ToolType type;
         QString message;
     };
 
-    // Create buttons
     auto *btnCameraPan = new QPushButton("Kamera", panel);
     auto *btnTerrain = new QPushButton("Teren", panel);
     auto *btnObstacle = new QPushButton("Przeszkoda", panel);
     auto *btnRiver = new QPushButton("Rzeka", panel);
-    auto *btnRain = new QPushButton("Źródło wody", panel);
+    auto *btnWaterSource = new QPushButton("Źródło wody", panel);
+    auto *btnRain = new QPushButton("Deszcz", panel);
     auto *btnEraser = new QPushButton("Gumka", panel);
 
-    // Configure tool buttons with their types and messages
-    std::vector<ToolButton> toolButtons = {
+    // create array of tool buttons
+    std::array<ToolButton, 7> toolButtons = {{
         {btnCameraPan, ToolType::Camera, "Tryb kamery włączony - przeciągnij aby przesunąć widok"},
         {btnTerrain, ToolType::Terrain, "Narzędzie: Teren - kliknij aby podnieść teren"},
         {btnObstacle, ToolType::Obstacle, "Narzędzie: Przeszkoda - kliknij aby umieścić przeszkodę"},
         {btnRiver, ToolType::River, "Narzędzie: Rzeka - kliknij aby utworzyć rzekę"},
-        {btnRain, ToolType::WaterSource, "Narzędzie: Źródło wody - kliknij aby dodać źródło wody"},
+        {btnWaterSource, ToolType::WaterSource, "Narzędzie: Źródło wody - stałe źródło utrzymujące poziom wody"},
+        {btnRain, ToolType::Rain, "Narzędzie: Deszcz - obszar opadów dodający wodę podczas symulacji"},
         {btnEraser, ToolType::Eraser, "Narzędzie: Gumka - kliknij aby wyczyścić komórkę"}
-    };
+    }};
 
-    // Setup all buttons
+    // setup all buttons in a loop
     for (auto& toolBtn : toolButtons) {
         toolBtn.button->setCheckable(true);
         toolBtn.button->setStyleSheet(
@@ -251,7 +255,7 @@ QWidget* MainWindow::setupLeftPanel() {
         layout->addWidget(toolBtn.button);
     }
 
-    // Brush size slider
+    // brush size slider
     layout->addSpacing(10);
     auto *brushSizeLabel = new QLabel("Rozmiar pędzla:", panel);
     layout->addWidget(brushSizeLabel);

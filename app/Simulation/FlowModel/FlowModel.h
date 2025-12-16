@@ -43,6 +43,7 @@ class FlowModel : public QObject {
     void computeFlowStep();
     float calculateOutflow(int x, int y, int nx, int ny) const;
     void applyWaterSources();
+    void applyRainfall();
     void updateVelocities() const;
     void updateCellVelocity(int x, int y, float cellSize) const;
     float calculateGradientX(int x, int y, float cellSize) const;

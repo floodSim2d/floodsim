@@ -182,12 +182,13 @@ void main() {
         terrainColor = getSnowLevelColor(fragTexCoord, terrainHeight);
     }
 
-    // Water overlay
-    if (waterDepth > 0.0) {
+    // water overlay
+    if (waterDepth > 0.001) {
         float totalHeight = terrainHeight + waterDepth;
         vec3 waterColor = getWaterColor(fragTexCoord, waterDepth, totalHeight);
-        // More opaque blending - water covers terrain more at greater depths
-        float waterOpacity = clamp(waterDepth / 3.0, 0.0, 0.95);
+        // more sensitive opacity curve for shallow water visibility
+        // ysing sqrt to make shallow water more visible
+        float waterOpacity = clamp(sqrt(waterDepth) / 1.5, 0.1, 0.95);
         terrainColor = mix(terrainColor, waterColor, waterOpacity);
     }
 

@@ -1,7 +1,6 @@
 #ifndef FLOODSIM_PAINTTOOL_H
 #define FLOODSIM_PAINTTOOL_H
 
-#include <cstdint>
 #include <QTimer>
 #include <QObject>
 
@@ -14,6 +13,7 @@ enum class ToolType : std::uint8_t {
     Obstacle,
     River,
     WaterSource,
+    Rain,
     Eraser
 };
 
