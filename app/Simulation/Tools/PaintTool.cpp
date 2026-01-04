@@ -17,7 +17,7 @@ PaintTool::PaintTool(QObject* parent)
       isContinuousPainting(false) {
 
     // Setup paint timer for continuous painting
-    connect(paintTimer, &QTimer::timeout, this, &PaintTool::applyPaintAtCurrentPosition);
+    connect(paintTimer, &QTimer:: timeout, this, &PaintTool::applyPaintAtCurrentPosition);
     paintTimer->setInterval(50);  // Apply paint every 50ms (20 times per second)
 }
 
@@ -30,7 +30,7 @@ void PaintTool::setBrushSize(const int size) {
 }
 
 void PaintTool::applyTool(Grid* grid, const int centerX, const int centerY) const {
-    if (grid == nullptr || currentTool == ToolType::Camera) {
+    if (grid == nullptr || currentTool == ToolType:: Camera) {
         return;
     }
 
@@ -64,24 +64,38 @@ void PaintTool::applySingleCell(Cell* cell) const {
 
     switch (currentTool) {
         case ToolType::Terrain:
-            if (cell->getType() != LAND) {
-                cell->setType(LAND);
-            }
+            // POPRAWIONE - Teren nadpisuje wszystko
+            cell->setType(LAND);
             cell->setTerrainHeight(std::min(cell->getTerrainHeight() + 0.5F, CAMERA_MAX_HEIGHT));
+            // Usuń wodę gdy budujesz teren
+            cell->setWaterDepth(0.0F);
+            cell->setSourceStrength(0.0F);
+            cell->setRainIntensity(0.0F);
             break;
 
-        case ToolType::Obstacle:
+        case ToolType:: Obstacle:
             if (cell->getType() != OBSTACLE) {
                 cell->setType(OBSTACLE);
             }
             break;
 
         case ToolType::River:
-            if (cell->getType() != RIVER) {
-                cell->setType(RIVER);
+        {
+            // POPRAWIONE - Rzeka tworzy wgłębienie z wodą
+            cell->setType(RIVER);
+
+            // Zawsze obniżaj teren tworząc wgłębienie
+            const float newHeight = cell->getTerrainHeight() - 0.5F;
+            if (newHeight >= -1.0F * currentGrid->getMaxDepth()) {
+                cell->setTerrainHeight(newHeight);
             }
-            cell->setWaterDepth(cell->getWaterDepth() + 0.5F);
+
+            // Dodaj wodę do rzeki
+            if (cell->getWaterDepth() < cell->getRiverCapacity()) {
+                cell->setWaterDepth(std::min(cell->getWaterDepth() + 0.5F, cell->getRiverCapacity()));
+            }
             break;
+        }
 
         case ToolType::WaterSource:
             if (cell->getType() != WATER_SOURCE) {
@@ -151,4 +165,3 @@ void PaintTool::applyPaintAtCurrentPosition() {
         emit paintApplied();
     }
 }
-

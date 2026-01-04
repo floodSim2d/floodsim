@@ -62,11 +62,40 @@ MainWindow::MainWindow(QWidget *parent)
 }
 
 MainWindow::~MainWindow() {
-    // cleanup opengl resources used in grid first
-    renderer->makeCurrent();
-    grid->~Grid();
-    renderer->doneCurrent();
-    delete renderer;
+    qDebug() << "MainWindow destructor - start";
+
+    // 1. Zatrzymaj symulację PRZED czyszczeniem czegokolwiek
+    if (flowModel) {
+        qDebug() << "Stopping simulation";
+        flowModel->stop();
+    }
+
+    // 2. Wyczyść zasoby OpenGL ZANIM Qt zacznie niszczyć widgety
+    if (grid && renderer) {
+        qDebug() << "Cleaning up OpenGL resources";
+        renderer->makeCurrent();
+
+        // Wyczyść tylko zasoby OpenGL, NIE usuwaj grid
+        if (grid->getWidth() > 0) {  // Sprawdź czy grid jest zainicjalizowany
+            grid->cleanup();
+        }
+
+        renderer->doneCurrent();
+    }
+
+    // 3. Zwolnij unique_ptrs w ODWROTNEJ kolejności tworzenia
+    qDebug() << "Releasing flowModel";
+    flowModel.reset();
+
+    qDebug() << "Releasing paintTool";
+    paintTool.reset();
+
+    qDebug() << "Releasing grid";
+    grid.reset();
+
+    // renderer zostanie usunięty przez Qt jako child
+
+    qDebug() << "MainWindow destructor - end";
 }
 
 void MainWindow::connectFlowModelSignals() {
@@ -158,7 +187,7 @@ void MainWindow::setupToolBar() {
     // Create height info label in toolbar
     toolbar->addSeparator();
     heightLabel = new QLabel("Wysokość: ---", this);
-    heightLabel->setStyleSheet("QLabel { padding: 5px; background-color: rgba(0, 0, 0, 0. 1); border-radius: 3px; }");
+    heightLabel->setStyleSheet("QLabel { padding: 5px; background-color: rgba(0, 0, 0, 0.1); border-radius: 3px; }");
     heightLabel->setMinimumWidth(200);
     toolbar->addWidget(heightLabel);
 
@@ -186,7 +215,7 @@ void MainWindow::setupToolBar() {
         if (cell.isRainArea()) {
             label += QString(" | Deszcz (intensywność: %1)").arg(cell.getRainIntensity(), 0, 'f', 2);
         }
-        if (cell.getWaterDepth() > cell.getRiverCapacity()) {
+        if (cell. getWaterDepth() > cell.getRiverCapacity()) {
             label += QString(" | Przelew wody!");
         }
         heightLabel->setText(QString("Pozycja: (%1, %2) | %3").arg(gridX).arg(gridY).arg(label));
@@ -198,7 +227,7 @@ void MainWindow::setupToolBar() {
         statusBar()->showMessage("Symulacja zresetowana");
     });
 
-    connect(playAction, &QAction:: triggered, this, [this]() {
+    connect(playAction, &QAction::triggered, this, [this]() {
         flowModel->play();
     });
 
@@ -218,11 +247,11 @@ void MainWindow::setupStatusBar() {
 
 
     connect(renderer, &OpenGLRenderer::cellClicked, this, [this](int gridX, int gridY) {
-        statusBar()->showMessage(QString("Kliknięto komórkę:  (%1, %2)").arg(gridX).arg(gridY));
+        statusBar()->showMessage(QString("Kliknięto komórkę: (%1, %2)").arg(gridX).arg(gridY));
     });
 }
 
-QWidget* MainWindow:: setupLeftPanel() {
+QWidget* MainWindow::setupLeftPanel() {
     auto *panel = new QWidget(this);
     auto *layout = new QVBoxLayout(panel);
 
@@ -242,12 +271,12 @@ QWidget* MainWindow:: setupLeftPanel() {
 
     std::vector<ToolButtonInfo> tools = {
         {"Kamera", ToolType::Camera, "Tryb kamery włączony - nawiguj sceną 3D"},
-        {"Teren", ToolType::Terrain, "Narzędzie: Teren - kliknij aby podnieść teren"},
-        {"Przeszkoda", ToolType::Obstacle, "Narzędzie: Przeszkoda - kliknij aby umieścić przeszkodę"},
+        {"Teren", ToolType::Terrain, "Narzędzie:  Teren - kliknij aby podnieść teren"},
+        {"Przeszkoda", ToolType:: Obstacle, "Narzędzie: Przeszkoda - kliknij aby umieścić przeszkodę"},
         {"Rzeka", ToolType::River, "Narzędzie: Rzeka - kliknij aby utworzyć rzekę"},
-        {"Źródło wody", ToolType:: WaterSource, "Narzędzie: Źródło wody - stałe źródło utrzymujące poziom wody"},
+        {"Źródło wody", ToolType::WaterSource, "Narzędzie: Źródło wody - stałe źródło utrzymujące poziom wody"},
         {"Deszcz", ToolType::Rain, "Narzędzie: Deszcz - obszar opadów dodający wodę podczas symulacji"},
-        {"Gumka", ToolType:: Eraser, "Narzędzie: Gumka - kliknij aby wyczyścić komórkę"}
+        {"Gumka", ToolType::Eraser, "Narzędzie: Gumka - kliknij aby wyczyścić komórkę"}
     };
 
     // Create and setup all buttons
@@ -255,7 +284,7 @@ QWidget* MainWindow:: setupLeftPanel() {
         auto* button = new QPushButton(toolInfo.name, panel);
         button->setCheckable(true);
         button->setStyleSheet(
-            "QPushButton { padding: 8px; font-weight: bold; }"
+            "QPushButton { padding:  8px; font-weight: bold; }"
             "QPushButton:checked { background-color: #4CAF50; color: white; }"
         );
         layout->addWidget(button);
@@ -267,7 +296,7 @@ QWidget* MainWindow:: setupLeftPanel() {
             // Enable camera mode ONLY when Camera tool is selected (like 3dCam)
             renderer->setCameraPanEnabled(toolInfo.type == ToolType:: Camera);
 
-            statusBar()->showMessage(toolInfo.message);
+            statusBar()->showMessage(toolInfo. message);
         });
     }
 
@@ -323,13 +352,13 @@ QWidget* MainWindow::setupRightPanel() {
     // Max depth control with slider
     groupLayout->addWidget(new QLabel("Max głębokość:", grp));
 
-    auto *depthSlider = new QSlider(Qt:: Horizontal, grp);
+    auto *depthSlider = new QSlider(Qt::Horizontal, grp);
     depthSlider->setMinimum(MIN_WATER_DEPTH);
     depthSlider->setMaximum(MAX_WATER_DEPTH);
     // Use default value (50) since Grid isn't initialized yet in constructor
     // Grid is created in initializeGL() which is called after MainWindow constructor
     depthSlider->setValue(DEFAULT_WATER_DEPTH);
-    depthSlider->setTickPosition(QSlider::TicksBelow);
+    depthSlider->setTickPosition(QSlider:: TicksBelow);
     depthSlider->setTickInterval(10);
     groupLayout->addWidget(depthSlider);
 

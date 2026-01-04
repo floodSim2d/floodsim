@@ -22,18 +22,14 @@ Grid::Grid(const int width, const int height, const float cellSize, const float 
 }
 
 Grid::~Grid() {
-    destroyPBOs();
-
-    VAO->destroy();
-    indexBuffer->destroy();
-    vertexBuffer->destroy();
-    heightTexture->destroy();
-
-    delete shaderProgram;
-    delete vertexBuffer;
-    delete indexBuffer;
-    delete VAO;
-    delete heightTexture;
+    qDebug() << "Grid destructor";
+    shaderProgram = nullptr;
+    vertexBuffer = nullptr;
+    indexBuffer = nullptr;
+    VAO = nullptr;
+    heightTexture = nullptr;
+    pbo[0] = nullptr;
+    pbo[1] = nullptr;
 }
 
 void Grid::initialize(QOpenGLFunctions* gl_context) {
@@ -444,4 +440,52 @@ auto Grid::loadHeightmap(const QString& filename) -> bool {
 void Grid::clearHeightmap(const Cell& defaultCell) {
     std::ranges::fill(heightMap, defaultCell);
     updateHeightTexture();
+}
+
+void Grid:: cleanup() {
+    qDebug() << "Grid::cleanup() - start";
+
+    if (!glContext) {
+        qDebug() << "Grid::cleanup() - no GL context, skipping";
+        return;  // Nie było inicjalizacji OpenGL
+    }
+
+    qDebug() << "Destroying PBOs";
+    destroyPBOs();
+
+    if (VAO && VAO->isCreated()) {
+        qDebug() << "Destroying VAO";
+        VAO->destroy();
+        delete VAO;
+        VAO = nullptr;
+    }
+
+    if (indexBuffer && indexBuffer->isCreated()) {
+        qDebug() << "Destroying indexBuffer";
+        indexBuffer->destroy();
+        delete indexBuffer;
+        indexBuffer = nullptr;
+    }
+
+    if (vertexBuffer && vertexBuffer->isCreated()) {
+        qDebug() << "Destroying vertexBuffer";
+        vertexBuffer->destroy();
+        delete vertexBuffer;
+        vertexBuffer = nullptr;
+    }
+
+    if (heightTexture && heightTexture->isCreated()) {
+        qDebug() << "Destroying heightTexture";
+        heightTexture->destroy();
+        delete heightTexture;
+        heightTexture = nullptr;
+    }
+
+    if (shaderProgram) {
+        qDebug() << "Deleting shaderProgram";
+        delete shaderProgram;
+        shaderProgram = nullptr;
+    }
+
+    qDebug() << "Grid::cleanup() - end";
 }
