@@ -1,3 +1,4 @@
+
 #include "MainWindow.h"
 
 #include <QAction>
@@ -13,7 +14,10 @@
 #include <QStatusBar>
 #include <QToolBar>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QDebug>
 #include <QWidget>
+#include <QDoubleSpinBox>
 
 #include "../Simulation/Grid/Grid.h"
 #include "../Simulation/FlowModel/FlowModel.h"
@@ -24,18 +28,19 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
       grid(std::make_unique<Grid>(200, 200, 1.0F, DEFAULT_WATER_DEPTH)),
       flowModel(nullptr),
-      paintTool(std::make_unique<PaintTool>(this)),
+      paintTool(nullptr),
       renderer(nullptr),
       heightLabel(nullptr)
 {
+    // Tworzymy obiekty Qt przez new z parent=this — Qt zajmie się ich usunięciem
+    paintTool = new PaintTool(this);
     renderer = new OpenGLRenderer(grid.get(), this);
+    flowModel = new FlowModel(grid.get(), this);
 
-    renderer->setPaintTool(paintTool. get());
-
-    flowModel = std::make_unique<FlowModel>(grid.get(), this);
+    renderer->setPaintTool(paintTool);
 
     // when paint tool applies paint we update the renderer to reflect changes
-    connect(paintTool. get(), &PaintTool::paintApplied, renderer, QOverload<>:: of(&QWidget::update));
+    connect(paintTool, &PaintTool::paintApplied, renderer, QOverload<>::of(&QWidget::update));
 
     setWindowTitle("FloodSim — Symulator powodzi 2D");
     setupMenuBar();
@@ -57,61 +62,48 @@ MainWindow::MainWindow(QWidget *parent)
 
     // dodanie do układu
     mainLayout->addWidget(left);
-    mainLayout->addWidget(renderer, 1);
+    mainLayout->addWidget(renderer, 1);  // renderer jest Widgetem zarządzanym przez Qt
     mainLayout->addWidget(right);
 }
 
 MainWindow::~MainWindow() {
     qDebug() << "MainWindow destructor - start";
 
-    // 1. Zatrzymaj symulację PRZED czyszczeniem czegokolwiek
+    // 1. Zatrzymaj symulację
     if (flowModel) {
         qDebug() << "Stopping simulation";
         flowModel->stop();
     }
 
-    // 2. Wyczyść zasoby OpenGL ZANIM Qt zacznie niszczyć widgety
+    // 2. Wyczyść OpenGL PRZED zniszczeniem renderer
     if (grid && renderer) {
         qDebug() << "Cleaning up OpenGL resources";
         renderer->makeCurrent();
-
-        // Wyczyść tylko zasoby OpenGL, NIE usuwaj grid
-        if (grid->getWidth() > 0) {  // Sprawdź czy grid jest zainicjalizowany
-            grid->cleanup();
-        }
-
+        grid->cleanup();
         renderer->doneCurrent();
     }
 
-    // 3. Zwolnij unique_ptrs w ODWROTNEJ kolejności tworzenia
-    qDebug() << "Releasing flowModel";
-    flowModel.reset();
-
-    qDebug() << "Releasing paintTool";
-    paintTool.reset();
-
+    // Nie usuwać ręcznie paintTool/renderer/flowModel — Qt usunie je automatycznie (parent = this)
     qDebug() << "Releasing grid";
     grid.reset();
-
-    // renderer zostanie usunięty przez Qt jako child
 
     qDebug() << "MainWindow destructor - end";
 }
 
 void MainWindow::connectFlowModelSignals() {
-    connect(flowModel.get(), &FlowModel::simulationStarted, this, [this]() {
+    connect(flowModel, &FlowModel::simulationStarted, this, [this]() {
         statusBar()->showMessage("Symulacja uruchomiona");
     });
 
-    connect(flowModel.get(), &FlowModel::simulationPaused, this, [this]() {
+    connect(flowModel, &FlowModel::simulationPaused, this, [this]() {
         statusBar()->showMessage("Symulacja wstrzymana");
     });
 
-    connect(flowModel.get(), &FlowModel::simulationStopped, this, [this]() {
+    connect(flowModel, &FlowModel::simulationStopped, this, [this]() {
         statusBar()->showMessage("Symulacja zatrzymana");
     });
 
-    connect(flowModel.get(), &FlowModel::stepCompleted, this, [this]() {
+    connect(flowModel, &FlowModel::stepCompleted, this, [this]() {
         renderer->update();
     });
 }
@@ -178,11 +170,11 @@ void MainWindow::setupMenuBar() {
 
 void MainWindow::setupToolBar() {
     QToolBar *toolbar = addToolBar("Toolbar");
-    const QAction* playAction = toolbar->addAction("▶ Start");
-    const QAction* pauseAction = toolbar->addAction("⏸ Stop");
-    const QAction* stepAction = toolbar->addAction("⏭ Krok");
+    QAction* playAction = toolbar->addAction("▶ Start");
+    QAction* pauseAction = toolbar->addAction("⏸ Stop");
+    QAction* stepAction = toolbar->addAction("⏭ Krok");
     toolbar->addSeparator();
-    const QAction * resetAction = toolbar->addAction("Reset");
+    QAction * resetAction = toolbar->addAction("Reset");
 
     // Create height info label in toolbar
     toolbar->addSeparator();
@@ -192,7 +184,7 @@ void MainWindow::setupToolBar() {
     toolbar->addWidget(heightLabel);
 
     // event listeners
-    connect(renderer, &OpenGLRenderer::cellHovered , this, [this](int gridX, int gridY, const Cell& cell) {
+    connect(renderer, &OpenGLRenderer::cellHovered, this, [this](int gridX, int gridY, const Cell& cell) {
         QString label = QString("Wysokość terenu: %1").arg(cell.getTerrainHeight(), 0, 'f', 2);
         if (const auto waterDepth = cell.getWaterDepth(); waterDepth > 0.0F) {
             label += QString(" | Głębokość wody: %1").arg(waterDepth, 0, 'f', 2);
@@ -215,7 +207,7 @@ void MainWindow::setupToolBar() {
         if (cell.isRainArea()) {
             label += QString(" | Deszcz (intensywność: %1)").arg(cell.getRainIntensity(), 0, 'f', 2);
         }
-        if (cell. getWaterDepth() > cell.getRiverCapacity()) {
+        if (cell.getWaterDepth() > cell.getRiverCapacity()) {
             label += QString(" | Przelew wody!");
         }
         heightLabel->setText(QString("Pozycja: (%1, %2) | %3").arg(gridX).arg(gridY).arg(label));
@@ -239,15 +231,13 @@ void MainWindow::setupToolBar() {
         flowModel->step();
         statusBar()->showMessage("Krok symulacji wykonany");
     });
-
 }
 
 void MainWindow::setupStatusBar() {
     statusBar()->showMessage("Gotowe");
 
-
     connect(renderer, &OpenGLRenderer::cellClicked, this, [this](int gridX, int gridY) {
-        statusBar()->showMessage(QString("Kliknięto komórkę: (%1, %2)").arg(gridX).arg(gridY));
+        statusBar()->showMessage(QString("Kliknięto komórkę:  (%1, %2)").arg(gridX).arg(gridY));
     });
 }
 
@@ -258,11 +248,9 @@ QWidget* MainWindow::setupLeftPanel() {
     layout->addWidget(new QLabel("Narzędzia:", panel));
     layout->addSpacing(10);
 
-    // Use QButtonGroup for exclusive button selection (like 3dCam)
     auto* buttonGroup = new QButtonGroup(this);
     buttonGroup->setExclusive(true);
 
-    // tool button configuration
     struct ToolButtonInfo {
         QString name;
         ToolType type;
@@ -272,35 +260,30 @@ QWidget* MainWindow::setupLeftPanel() {
     std::vector<ToolButtonInfo> tools = {
         {"Kamera", ToolType::Camera, "Tryb kamery włączony - nawiguj sceną 3D"},
         {"Teren", ToolType::Terrain, "Narzędzie:  Teren - kliknij aby podnieść teren"},
-        {"Przeszkoda", ToolType:: Obstacle, "Narzędzie: Przeszkoda - kliknij aby umieścić przeszkodę"},
+        {"Przeszkoda", ToolType::Obstacle, "Narzędzie: Przeszkoda - kliknij aby umieścić przeszkodę"},
         {"Rzeka", ToolType::River, "Narzędzie: Rzeka - kliknij aby utworzyć rzekę"},
         {"Źródło wody", ToolType::WaterSource, "Narzędzie: Źródło wody - stałe źródło utrzymujące poziom wody"},
         {"Deszcz", ToolType::Rain, "Narzędzie: Deszcz - obszar opadów dodający wodę podczas symulacji"},
         {"Gumka", ToolType::Eraser, "Narzędzie: Gumka - kliknij aby wyczyścić komórkę"}
     };
 
-    // Create and setup all buttons
     for (const auto& toolInfo : tools) {
         auto* button = new QPushButton(toolInfo.name, panel);
         button->setCheckable(true);
         button->setStyleSheet(
-            "QPushButton { padding:  8px; font-weight: bold; }"
+            "QPushButton { padding: 8px; font-weight: bold; }"
             "QPushButton:checked { background-color: #4CAF50; color: white; }"
         );
         layout->addWidget(button);
         buttonGroup->addButton(button);
 
-        connect(button, &QPushButton:: clicked, this, [this, toolInfo]() {
+        connect(button, &QPushButton::clicked, this, [this, toolInfo]() {
             paintTool->setToolType(toolInfo.type);
-
-            // Enable camera mode ONLY when Camera tool is selected (like 3dCam)
-            renderer->setCameraPanEnabled(toolInfo.type == ToolType:: Camera);
-
-            statusBar()->showMessage(toolInfo. message);
+            renderer->setCameraPanEnabled(toolInfo.type == ToolType::Camera);
+            statusBar()->showMessage(toolInfo.message);
         });
     }
 
-    // brush size slider
     layout->addSpacing(10);
     auto *brushSizeLabel = new QLabel("Rozmiar pędzla:", panel);
     layout->addWidget(brushSizeLabel);
@@ -324,9 +307,7 @@ QWidget* MainWindow::setupLeftPanel() {
         brushSizeValueLabel->setText(QString::number(value));
     });
 
-    // Start with Terrain tool selected (NOT Camera like 3dCam)
-    // This keeps FlowModel's behavior where you start in editing mode
-    buttonGroup->buttons().at(1)->setChecked(true);  // Teren
+    buttonGroup->buttons().at(1)->setChecked(true);
     paintTool->setToolType(tools[1].type);
     renderer->setCameraPanEnabled(false);
 
@@ -349,16 +330,13 @@ QWidget* MainWindow::setupRightPanel() {
     groupLayout->addWidget(new QLabel("K:", grp));
     groupLayout->addWidget(spinK);
 
-    // Max depth control with slider
     groupLayout->addWidget(new QLabel("Max głębokość:", grp));
 
     auto *depthSlider = new QSlider(Qt::Horizontal, grp);
     depthSlider->setMinimum(MIN_WATER_DEPTH);
     depthSlider->setMaximum(MAX_WATER_DEPTH);
-    // Use default value (50) since Grid isn't initialized yet in constructor
-    // Grid is created in initializeGL() which is called after MainWindow constructor
     depthSlider->setValue(DEFAULT_WATER_DEPTH);
-    depthSlider->setTickPosition(QSlider:: TicksBelow);
+    depthSlider->setTickPosition(QSlider::TicksBelow);
     depthSlider->setTickInterval(10);
     groupLayout->addWidget(depthSlider);
 
@@ -372,18 +350,14 @@ QWidget* MainWindow::setupRightPanel() {
     panelLayout->addWidget(grp);
     panelLayout->addStretch();
 
-    // Update label when slider moves (but don't apply yet)
     connect(depthSlider, &QSlider::valueChanged, this, [depthValueLabel](int value) {
         depthValueLabel->setText(QString::number(value));
     });
 
-    // Apply changes only when button is clicked
     connect(apply, &QPushButton::clicked, this, [this, spinK, depthSlider]() {
-        // Apply K value
         const auto kValue = static_cast<float>(spinK->value());
         flowModel->setFlowCoefficient(kValue);
 
-        // Apply maxDepth value
         const auto newDepth = static_cast<float>(depthSlider->value());
         grid->setMaxDepth(newDepth);
         renderer->updateProjectionMatrix();

@@ -1,33 +1,29 @@
-#pragma once
 #include <QMainWindow>
-#include <QLabel>
 #include <memory>
 
-class OpenGLRenderer;
+class QLabel;
 class Grid;
 class FlowModel;
 class PaintTool;
+class OpenGLRenderer;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
-    explicit MainWindow(QWidget *parent = nullptr);
-    ~MainWindow() override;
+    MainWindow(QWidget *parent = nullptr);
+    ~MainWindow();
 
 private:
+    void connectFlowModelSignals();
     void setupMenuBar();
     void setupToolBar();
+    void setupStatusBar();
     QWidget* setupLeftPanel();
     QWidget* setupRightPanel();
-    void setupStatusBar();
-    void connectFlowModelSignals();
 
-    // Core components
-    std::unique_ptr<Grid> grid;
-    std::unique_ptr<FlowModel> flowModel;
-    std::unique_ptr<PaintTool> paintTool;
-
-    // UI components
-    OpenGLRenderer* renderer;
+    std::unique_ptr<Grid> grid; // Grid nie jest QObject — trzymać w unique_ptr
+    FlowModel* flowModel;       // zarządzanie przez Qt (parent = this)
+    PaintTool* paintTool;       // zarządzanie przez Qt (parent = this)
+    OpenGLRenderer* renderer;   // zarządzanie przez Qt (parent = this)
     QLabel* heightLabel;
 };
