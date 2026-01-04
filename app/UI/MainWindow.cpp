@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include <QAction>
+#include <QButtonGroup>
 #include <QFileDialog>
 #include <QGroupBox>
 #include <QLabel>
@@ -29,12 +30,12 @@ MainWindow::MainWindow(QWidget *parent)
 {
     renderer = new OpenGLRenderer(grid.get(), this);
 
-    renderer->setPaintTool(paintTool.get());
+    renderer->setPaintTool(paintTool. get());
 
     flowModel = std::make_unique<FlowModel>(grid.get(), this);
 
     // when paint tool applies paint we update the renderer to reflect changes
-    connect(paintTool.get(), &PaintTool::paintApplied, renderer, QOverload<>::of(&QWidget::update));
+    connect(paintTool. get(), &PaintTool::paintApplied, renderer, QOverload<>:: of(&QWidget::update));
 
     setWindowTitle("FloodSim — Symulator powodzi 2D");
     setupMenuBar();
@@ -113,7 +114,7 @@ void MainWindow::setupMenuBar() {
             auto const widthBefore = grid->getWidth();
             auto const heightBefore = grid->getHeight();
 
-            if (!grid->loadHeightmap(path)) {
+            if (! grid->loadHeightmap(path)) {
                 QMessageBox::warning(this, "Błąd wczytywania",
                     "Nie udało się wczytać pliku mapy.\n\n"
                     "Plik może być uszkodzony lub mieć nieprawidłowy format.");
@@ -157,7 +158,7 @@ void MainWindow::setupToolBar() {
     // Create height info label in toolbar
     toolbar->addSeparator();
     heightLabel = new QLabel("Wysokość: ---", this);
-    heightLabel->setStyleSheet("QLabel { padding: 5px; background-color: rgba(0, 0, 0, 0.1); border-radius: 3px; }");
+    heightLabel->setStyleSheet("QLabel { padding: 5px; background-color: rgba(0, 0, 0, 0. 1); border-radius: 3px; }");
     heightLabel->setMinimumWidth(200);
     toolbar->addWidget(heightLabel);
 
@@ -180,7 +181,7 @@ void MainWindow::setupToolBar() {
             label += QString(" | Rzeka");
         }
         if (cell.getType() == WATER_SOURCE) {
-            label += QString(" | Źródło wody (siła: %1)").arg(cell.getSourceStrength(), 0, 'f', 2);
+            label += QString(" | Źródło wody (siła:  %1)").arg(cell.getSourceStrength(), 0, 'f', 2);
         }
         if (cell.isRainArea()) {
             label += QString(" | Deszcz (intensywność: %1)").arg(cell.getRainIntensity(), 0, 'f', 2);
@@ -197,7 +198,7 @@ void MainWindow::setupToolBar() {
         statusBar()->showMessage("Symulacja zresetowana");
     });
 
-    connect(playAction, &QAction::triggered, this, [this]() {
+    connect(playAction, &QAction:: triggered, this, [this]() {
         flowModel->play();
     });
 
@@ -217,51 +218,57 @@ void MainWindow::setupStatusBar() {
 
 
     connect(renderer, &OpenGLRenderer::cellClicked, this, [this](int gridX, int gridY) {
-        statusBar()->showMessage(QString("Kliknięto komórkę: (%1, %2)").arg(gridX).arg(gridY));
+        statusBar()->showMessage(QString("Kliknięto komórkę:  (%1, %2)").arg(gridX).arg(gridY));
     });
 }
 
-QWidget* MainWindow::setupLeftPanel() {
+QWidget* MainWindow:: setupLeftPanel() {
     auto *panel = new QWidget(this);
     auto *layout = new QVBoxLayout(panel);
 
     layout->addWidget(new QLabel("Narzędzia:", panel));
     layout->addSpacing(10);
 
+    // Use QButtonGroup for exclusive button selection (like 3dCam)
+    auto* buttonGroup = new QButtonGroup(this);
+    buttonGroup->setExclusive(true);
+
     // tool button configuration
-    struct ToolButton {
-        QPushButton* button;
+    struct ToolButtonInfo {
+        QString name;
         ToolType type;
         QString message;
     };
 
-    auto *btnCameraPan = new QPushButton("Kamera", panel);
-    auto *btnTerrain = new QPushButton("Teren", panel);
-    auto *btnObstacle = new QPushButton("Przeszkoda", panel);
-    auto *btnRiver = new QPushButton("Rzeka", panel);
-    auto *btnWaterSource = new QPushButton("Źródło wody", panel);
-    auto *btnRain = new QPushButton("Deszcz", panel);
-    auto *btnEraser = new QPushButton("Gumka", panel);
+    std::vector<ToolButtonInfo> tools = {
+        {"Kamera", ToolType::Camera, "Tryb kamery włączony - nawiguj sceną 3D"},
+        {"Teren", ToolType::Terrain, "Narzędzie: Teren - kliknij aby podnieść teren"},
+        {"Przeszkoda", ToolType::Obstacle, "Narzędzie: Przeszkoda - kliknij aby umieścić przeszkodę"},
+        {"Rzeka", ToolType::River, "Narzędzie: Rzeka - kliknij aby utworzyć rzekę"},
+        {"Źródło wody", ToolType:: WaterSource, "Narzędzie: Źródło wody - stałe źródło utrzymujące poziom wody"},
+        {"Deszcz", ToolType::Rain, "Narzędzie: Deszcz - obszar opadów dodający wodę podczas symulacji"},
+        {"Gumka", ToolType:: Eraser, "Narzędzie: Gumka - kliknij aby wyczyścić komórkę"}
+    };
 
-    // create array of tool buttons
-    std::array<ToolButton, 7> toolButtons = {{
-        {btnCameraPan, ToolType::Camera, "Tryb kamery włączony - przeciągnij aby przesunąć widok"},
-        {btnTerrain, ToolType::Terrain, "Narzędzie: Teren - kliknij aby podnieść teren"},
-        {btnObstacle, ToolType::Obstacle, "Narzędzie: Przeszkoda - kliknij aby umieścić przeszkodę"},
-        {btnRiver, ToolType::River, "Narzędzie: Rzeka - kliknij aby utworzyć rzekę"},
-        {btnWaterSource, ToolType::WaterSource, "Narzędzie: Źródło wody - stałe źródło utrzymujące poziom wody"},
-        {btnRain, ToolType::Rain, "Narzędzie: Deszcz - obszar opadów dodający wodę podczas symulacji"},
-        {btnEraser, ToolType::Eraser, "Narzędzie: Gumka - kliknij aby wyczyścić komórkę"}
-    }};
-
-    // setup all buttons in a loop
-    for (auto& toolBtn : toolButtons) {
-        toolBtn.button->setCheckable(true);
-        toolBtn.button->setStyleSheet(
+    // Create and setup all buttons
+    for (const auto& toolInfo : tools) {
+        auto* button = new QPushButton(toolInfo.name, panel);
+        button->setCheckable(true);
+        button->setStyleSheet(
             "QPushButton { padding: 8px; font-weight: bold; }"
             "QPushButton:checked { background-color: #4CAF50; color: white; }"
         );
-        layout->addWidget(toolBtn.button);
+        layout->addWidget(button);
+        buttonGroup->addButton(button);
+
+        connect(button, &QPushButton:: clicked, this, [this, toolInfo]() {
+            paintTool->setToolType(toolInfo.type);
+
+            // Enable camera mode ONLY when Camera tool is selected (like 3dCam)
+            renderer->setCameraPanEnabled(toolInfo.type == ToolType:: Camera);
+
+            statusBar()->showMessage(toolInfo.message);
+        });
     }
 
     // brush size slider
@@ -288,39 +295,11 @@ QWidget* MainWindow::setupLeftPanel() {
         brushSizeValueLabel->setText(QString::number(value));
     });
 
-    // Connect all tool buttons with a loop
-    for (const auto& toolBtn : toolButtons) {
-        if (toolBtn.type == ToolType::Camera) {
-            // Special handling for camera button
-            connect(toolBtn.button, &QPushButton::toggled, this, [this, toolButtons, toolBtn](bool checked) {
-                renderer->setCameraPanEnabled(checked);
-                if (checked) {
-                    for (const auto& btn : toolButtons) {
-                        if (btn.type != ToolType::Camera) {
-                            btn.button->setChecked(false);
-                        }
-                    }
-                    paintTool->setToolType(ToolType::Camera);
-                    statusBar()->showMessage(toolBtn.message);
-                }
-            });
-        } else {
-            // Paint tool buttons
-            connect(toolBtn.button, &QPushButton::clicked, this, [this, toolButtons, currentTool = toolBtn](bool) {
-                // Disable camera mode
-                toolButtons[0].button->setChecked(false);
-                renderer->setCameraPanEnabled(false);
-
-                paintTool->setToolType(currentTool.type);
-
-                for (const auto& btn : toolButtons) {
-                    btn.button->setChecked(btn.button == currentTool.button);
-                }
-
-                statusBar()->showMessage(currentTool.message);
-            });
-        }
-    }
+    // Start with Terrain tool selected (NOT Camera like 3dCam)
+    // This keeps FlowModel's behavior where you start in editing mode
+    buttonGroup->buttons().at(1)->setChecked(true);  // Teren
+    paintTool->setToolType(tools[1].type);
+    renderer->setCameraPanEnabled(false);
 
     return panel;
 }
@@ -344,7 +323,7 @@ QWidget* MainWindow::setupRightPanel() {
     // Max depth control with slider
     groupLayout->addWidget(new QLabel("Max głębokość:", grp));
 
-    auto *depthSlider = new QSlider(Qt::Horizontal, grp);
+    auto *depthSlider = new QSlider(Qt:: Horizontal, grp);
     depthSlider->setMinimum(MIN_WATER_DEPTH);
     depthSlider->setMaximum(MAX_WATER_DEPTH);
     // Use default value (50) since Grid isn't initialized yet in constructor

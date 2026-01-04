@@ -9,12 +9,19 @@
 
 #include "../Simulation/Tools/PaintTool.h"
 
-constexpr float CAMERA_ZOOM_MAX = 100.0F;
-constexpr float CAMERA_ZOOM_MIN = 10.0F;
+constexpr float CAMERA_ZOOM_MAX_ORTHO = 100.0F;
+constexpr float CAMERA_ZOOM_MIN_ORTHO = 10.0F;
+constexpr float CAMERA_ZOOM_MAX_PERSP = 200.0F;
+constexpr float CAMERA_ZOOM_MIN_PERSP = 5.0F;
 constexpr float CAMERA_MAX_HEIGHT = 1000.0F;
 
 class Cell;
 class Grid;
+
+enum class CameraMode {
+    TopDown, // Orthographic, for editing
+    Orbit    // Perspective, for navigation
+};
 
 class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
     Q_OBJECT
@@ -27,11 +34,13 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
     auto getGrid() const -> Grid* { return grid; }
 
     // Camera control
+    void setCameraMode(CameraMode mode);
+    CameraMode getCameraMode() const { return cameraMode; }
     void setZoom(float zoom);
     void panCamera(float deltaX, float deltaY);
     void resetCamera();
     void setCameraPanEnabled(bool enabled);
-    bool isCameraPanEnabled() const { return cameraPanEnabled; }
+    bool isCameraPanEnabled() const { return cameraMode == CameraMode::Orbit; }
     void updateProjectionMatrix();
 
     // Paint tool
@@ -55,6 +64,8 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
 
    private:
     void setupCamera();
+    void rotateCamera(float yawDelta, float pitchDelta);
+    void moveCameraVertical(float delta);
     bool screenToGridCoords(int screenX, int screenY, int& gridX, int& gridY) const;
 
     // Grid
@@ -65,9 +76,12 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
     QMatrix4x4 viewMatrix;
 
     // Camera state
+    CameraMode cameraMode;
     float cameraZoom;
     QVector3D cameraPosition;
     QVector3D cameraTarget;
+    float cameraYaw;      // For Orbit mode
+    float cameraPitch;    // For Orbit mode
 
     // Mouse interaction
     QPoint lastMousePos;
