@@ -12,7 +12,9 @@ FlowModel::FlowModel(Grid* grid, QObject* parent)
       dt(0.016f),              // ~60 FPS default
       flowCoefficient(0.5f),   // Moderate flow speed
       dampingFactor(0.999f),   // 0.1% energy loss per step so water doesn't oscillate indefinitely
-      updateInterval(16) {     // ~60 FPS
+      updateInterval(16),      // ~60 FPS
+      globalRainEnabled(false),
+      globalRainIntensity(0.0f) {
 
     connect(timer, &QTimer::timeout, this, &FlowModel::update);
 
@@ -58,6 +60,14 @@ void FlowModel::setUpdateInterval(int interval) {
     if (timer->isActive()) {
         timer->setInterval(updateInterval);
     }
+}
+
+void FlowModel::setGlobalRainEnabled(bool enabled) {
+    globalRainEnabled = enabled;
+}
+
+void FlowModel::setGlobalRainIntensity(float intensity) {
+    globalRainIntensity = intensity;
 }
 
 void FlowModel::update() {
@@ -210,21 +220,27 @@ void FlowModel::applyWaterSources() {
 }
 
 /*
- * Applies rainfall - adds water to rain areas during simulation
- * Rain areas add water continuously while the simulation is running
+ * Applies rainfall - adds water to the entire grid if global rain is enabled
  */
 void FlowModel::applyRainfall() {
+    if (!globalRainEnabled || globalRainIntensity <= 0.0001f) {
+        return;
+    }
+
     const auto width = grid->getWidth();
     const auto height = grid->getHeight();
+    const float cellArea = grid->getCellSize() * grid->getCellSize();
+
+    // Calculate volume of water to add per cell: Intensity (depth/sec) * Area
+    const float flowToAdd = globalRainIntensity * cellArea;
 
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
-            Cell* cell = grid->getCell(x, y);
-            if (cell != nullptr && cell->isRainArea() && cell->canFlowThrough()) {
+            const Cell* cell = grid->getCell(x, y);
+            // Rain falls on everything except obstacles (assuming obstacles are solid walls)
+            if (cell != nullptr && cell->canFlowThrough()) {
                 const int idx = y * width + x;
-                // Rain adds water based on intensity
-                const float rainFlow = cell->getRainIntensity();
-                flowBuffer[idx].netFlow += rainFlow;
+                flowBuffer[idx].netFlow += flowToAdd;
             }
         }
     }
@@ -298,4 +314,3 @@ auto FlowModel::calculateGradientY(const int x, const int y, const float cellSiz
 
     return (south->getTotalHeight() - north->getTotalHeight()) / (2.0f * cellSize);
 }
-

@@ -13,7 +13,7 @@ enum class ToolType : std::uint8_t {
     Obstacle,
     River,
     WaterSource,
-    Rain,
+    // Rain removed - replaced by global weather control
     Eraser
 };
 
@@ -38,8 +38,8 @@ public:
     void stopContinuousPainting();
     [[nodiscard]] bool isPainting() const { return isContinuousPainting; }
 
-signals:
-    void paintApplied();  // Emitted when paint is applied (for triggering UI updates)
+    signals:
+        void paintApplied();  // Emitted when paint is applied (for triggering UI updates)
 
 private slots:
     void applyPaintAtCurrentPosition();
@@ -59,4 +59,3 @@ private:
 };
 
 #endif  // FLOODSIM_PAINTTOOL_H
-

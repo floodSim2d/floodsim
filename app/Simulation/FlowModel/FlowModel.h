@@ -30,6 +30,12 @@ class FlowModel : public QObject {
     int getUpdateInterval() const { return updateInterval; }
     void setUpdateInterval(int interval);
 
+    // Global Rain Control
+    void setGlobalRainEnabled(bool enabled);
+    bool isGlobalRainEnabled() const { return globalRainEnabled; }
+    void setGlobalRainIntensity(float intensity);
+    float getGlobalRainIntensity() const { return globalRainIntensity; }
+
    signals:
     void simulationStarted();
     void simulationPaused();
@@ -59,6 +65,10 @@ class FlowModel : public QObject {
     float dampingFactor;       // energy loss during flow (0.0 - 1.0)
     int updateInterval;        // timer interval in milliseconds
 
+    // Global rain state
+    bool globalRainEnabled;
+    float globalRainIntensity; // Water depth added per second
+
     // flow data for current step
     struct FlowData {
         float netFlow;         // net flow into cell
@@ -68,4 +78,3 @@ class FlowModel : public QObject {
 };
 
 #endif  // FLOODSIM_FLOWMODEL_H
-
