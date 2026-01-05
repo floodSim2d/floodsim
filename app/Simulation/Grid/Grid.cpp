@@ -1,6 +1,6 @@
 #include "Grid.h"
 
-#include <QFile>
+#include "../../Utils/Logger.h"
 
 Grid::Grid(const int width, const int height, const float cellSize, const float maxDepth)
     : glContext(nullptr),
@@ -22,7 +22,7 @@ Grid::Grid(const int width, const int height, const float cellSize, const float 
 }
 
 Grid::~Grid() {
-    qDebug() << "Grid destructor";
+    LOG("Grid destructor");
     shaderProgram = nullptr;
     vertexBuffer = nullptr;
     indexBuffer = nullptr;
@@ -106,7 +106,7 @@ void Grid::createShaders() {
     shaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, ":/Simulation/Grid/shaders/grid.frag");
     shaderProgram->link();
     if (!shaderProgram->isLinked()) {
-        qDebug() << "Shader Program linking failed" << shaderProgram->log();
+        LOG(QString("Shader Program linking failed: %1").arg(shaderProgram->log()));
     }
 }
 
@@ -231,16 +231,14 @@ void Grid::createHeightTexture() {
 
 void Grid::updateHeightTexture(){
     if (heightTexture == nullptr) {
-        qDebug() << "heightTexture is null";
+        LOG("heightTexture is null");
         return;
     }
     if (pbo[0] == nullptr) {
-        qDebug() << "PBOs not created";
+        LOG("PBOs not created");
         return;
     }
 
-
-    // double buffering: use one PBO for upload while filling the other
     const int nextPboIndex = (currentPboIndex + 1) % 2;
 
     heightTexture->bind();
@@ -277,7 +275,7 @@ void Grid::updateHeightTexture(){
 
 void Grid::render(const QMatrix4x4& projection, const QMatrix4x4& view) const {
     if (shaderProgram == nullptr) {
-        qDebug() << "Shader Program not created, cannot render grid.";
+        LOG("Shader Program not created, cannot render grid.");
         return;
     }
     shaderProgram->bind();
@@ -325,12 +323,11 @@ auto Grid::worldPosToGrid(const QVector2D& worldPos) const -> QVector2D {
 
 void Grid::saveHeightmap(const QString& filename) const {
     QFile file(filename);
-    // add extension
     if (!filename.endsWith(".map")) {
         file.setFileName(filename + ".map");
     }
     if (!file.open(QIODevice::WriteOnly)) {
-        qDebug() << "Could not open file for writing:" << filename;
+        LOG(QString("Could not open file for writing: %1").arg(filename));
         return;
     }
 
@@ -359,11 +356,10 @@ void Grid::rollbackToSize(unsigned int originalWidth,unsigned int originalHeight
 auto Grid::loadHeightmap(const QString& filename) -> bool {
     QFile file(filename);
     if (!file.open(QIODevice::ReadOnly)) {
-        qDebug() << "Could not open file for reading:" << filename;
+        LOG(QString("Could not open file for reading: %1").arg(filename));
         return false;
     }
 
-    // store original state for rollback on failure
     const unsigned int originalWidth = width;
     const unsigned int originalHeight = height;
     bool textureWasDestroyed = false;
@@ -375,11 +371,10 @@ auto Grid::loadHeightmap(const QString& filename) -> bool {
         int file_height = 0;
         stream >> file_width >> file_height;
 
-        // validate dimensions
         if (file_width <= 0 || file_height <= 0 ||
             file_width > 10000 || file_height > 10000) {
             file.close();
-            qDebug() << "Invalid file dimensions:" << file_width << "x" << file_height;
+            LOG(QString("Invalid file dimensions: %1x%2").arg(file_width).arg(file_height));
             return false;
         }
 
@@ -400,7 +395,7 @@ auto Grid::loadHeightmap(const QString& filename) -> bool {
 
         for (auto &cell : heightMap) {
             if (stream.atEnd()) {
-                qDebug() << "Unexpected end of file while reading cells";
+                LOG("Unexpected end of file while reading cells");
                 file.close();
                 rollbackToSize(originalWidth, originalHeight, true);
                 return false;
@@ -408,7 +403,7 @@ auto Grid::loadHeightmap(const QString& filename) -> bool {
             stream >> cell;
 
             if (stream.status() != QDataStream::Ok) {
-                qDebug() << "Error reading cell data from file";
+                LOG("Error reading cell data from file");
                 file.close();
                 rollbackToSize(originalWidth, originalHeight, true);
                 return false;
@@ -425,12 +420,12 @@ auto Grid::loadHeightmap(const QString& filename) -> bool {
         return true;
 
     } catch (const std::exception& e) {
-        qDebug() << "Exception while loading heightmap:" << e.what();
+        LOG(QString("Exception while loading heightmap: %1").arg(e.what()));
         file.close();
         rollbackToSize(originalWidth, originalHeight, textureWasDestroyed);
         return false;
     } catch (...) {
-        qDebug() << "Unknown exception while loading heightmap";
+        LOG("Unknown exception while loading heightmap");
         file.close();
         rollbackToSize(originalWidth, originalHeight, textureWasDestroyed);
         return false;
@@ -443,49 +438,49 @@ void Grid::clearHeightmap(const Cell& defaultCell) {
 }
 
 void Grid:: cleanup() {
-    qDebug() << "Grid::cleanup() - start";
+    LOG("Grid::cleanup() - start");
 
     if (!glContext) {
-        qDebug() << "Grid::cleanup() - no GL context, skipping";
-        return;  // Nie było inicjalizacji OpenGL
+        LOG("Grid::cleanup() - no GL context, skipping");
+        return;
     }
 
-    qDebug() << "Destroying PBOs";
+    LOG("Destroying PBOs");
     destroyPBOs();
 
     if (VAO && VAO->isCreated()) {
-        qDebug() << "Destroying VAO";
+        LOG("Destroying VAO");
         VAO->destroy();
         delete VAO;
         VAO = nullptr;
     }
 
     if (indexBuffer && indexBuffer->isCreated()) {
-        qDebug() << "Destroying indexBuffer";
+        LOG("Destroying indexBuffer");
         indexBuffer->destroy();
         delete indexBuffer;
         indexBuffer = nullptr;
     }
 
     if (vertexBuffer && vertexBuffer->isCreated()) {
-        qDebug() << "Destroying vertexBuffer";
+        LOG("Destroying vertexBuffer");
         vertexBuffer->destroy();
         delete vertexBuffer;
         vertexBuffer = nullptr;
     }
 
     if (heightTexture && heightTexture->isCreated()) {
-        qDebug() << "Destroying heightTexture";
+        LOG("Destroying heightTexture");
         heightTexture->destroy();
         delete heightTexture;
         heightTexture = nullptr;
     }
 
     if (shaderProgram) {
-        qDebug() << "Deleting shaderProgram";
+        LOG("Deleting shaderProgram");
         delete shaderProgram;
         shaderProgram = nullptr;
     }
 
-    qDebug() << "Grid::cleanup() - end";
+    LOG("Grid::cleanup() - end");
 }

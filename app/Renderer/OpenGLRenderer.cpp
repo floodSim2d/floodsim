@@ -4,6 +4,7 @@
 #include <QtMath>
 #include <cmath>
 
+#include "../Utils/Logger.h"
 #include "../Simulation/Grid/Grid.h"
 #include "../Simulation/Grid/Cell.h"
 
@@ -32,12 +33,11 @@ void OpenGLRenderer::initializeGL() {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    qDebug() << "OpenGL Renderer initialized. ";
-    qDebug() << "Vendor:" << reinterpret_cast<const char*>(glGetString(GL_VENDOR));
-    qDebug() << "Renderer:" << reinterpret_cast<const char*>(glGetString(GL_RENDERER));
-    qDebug() << "Version:" << reinterpret_cast<const char*>(glGetString(GL_VERSION));
+    LOG("OpenGL Renderer initialized.");
+    LOG(QString("Vendor: %1").arg(reinterpret_cast<const char*>(glGetString(GL_VENDOR))));
+    LOG(QString("Renderer: %1").arg(reinterpret_cast<const char*>(glGetString(GL_RENDERER))));
+    LOG(QString("Version: %1").arg(reinterpret_cast<const char*>(glGetString(GL_VERSION))));
 
-    // Initialize grid if it exists (injected from MainWindow)
     if (grid != nullptr) {
         grid->initialize(this);
 

@@ -10,16 +10,15 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSlider>
-#include <QSpinBox>
 #include <QStatusBar>
 #include <QToolBar>
-#include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QDebug>
 #include <QWidget>
 #include <QDoubleSpinBox>
 #include <QCheckBox>
 
+#include "../Utils/Logger.h"
 #include "../Simulation/Grid/Grid.h"
 #include "../Simulation/FlowModel/FlowModel.h"
 #include "../Simulation/Tools/PaintTool.h"
@@ -68,27 +67,24 @@ MainWindow::MainWindow(QWidget *parent)
 }
 
 MainWindow::~MainWindow() {
-    qDebug() << "MainWindow destructor - start";
+    LOG("MainWindow destructor - start");
 
-    // 1. Zatrzymaj symulację
     if (flowModel) {
-        qDebug() << "Stopping simulation";
+        LOG("Stopping simulation");
         flowModel->stop();
     }
 
-    // 2. Wyczyść OpenGL PRZED zniszczeniem renderer
     if (grid && renderer) {
-        qDebug() << "Cleaning up OpenGL resources";
+        LOG("Cleaning up OpenGL resources");
         renderer->makeCurrent();
         grid->cleanup();
         renderer->doneCurrent();
     }
 
-    // Nie usuwać ręcznie paintTool/renderer/flowModel — Qt usunie je automatycznie (parent = this)
-    qDebug() << "Releasing grid";
+    LOG("Releasing grid");
     grid.reset();
 
-    qDebug() << "MainWindow destructor - end";
+    LOG("MainWindow destructor - end");
 }
 
 void MainWindow::connectFlowModelSignals() {
