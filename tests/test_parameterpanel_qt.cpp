@@ -10,19 +10,13 @@
 #include "Renderer/OpenGLRenderer.h"
 
 /**
- * @brief Test suite for ParameterPanel component
- *
- * Tests:
- * - Parameter controls are created
- * - Apply button triggers signal
- * - Parameters are applied to FlowModel and Grid
+ * @brief test suite for ParameterPanel component
  */
 class TestParameterPanel : public QObject {
     Q_OBJECT
 
 private slots:
     void initTestCase() {
-        // Create QApplication if not exists (needed for Qt GUI components)
         if (!QApplication::instance()) {
             int argc = 0;
             char* argv[] = {nullptr};
@@ -44,19 +38,16 @@ private slots:
         delete grid;
     }
 
-    // Test construction
     void testConstruction() {
         QVERIFY(parameterPanel != nullptr);
     }
 
-    // Test that flow coefficient spin box exists
     void testFlowCoefficientSpinBox() {
         QDoubleSpinBox* spinBox = parameterPanel->findChild<QDoubleSpinBox*>();
         QVERIFY(spinBox != nullptr);
         QCOMPARE(spinBox->value(), 1.0);
     }
 
-    // Test that max depth slider exists
     void testMaxDepthSlider() {
         QSlider* slider = parameterPanel->findChild<QSlider*>();
         QVERIFY(slider != nullptr);
@@ -64,7 +55,6 @@ private slots:
         QVERIFY(slider->value() <= MAX_WATER_DEPTH);
     }
 
-    // Test that apply button exists
     void testApplyButton() {
         QList<QPushButton*> buttons = parameterPanel->findChildren<QPushButton*>();
         bool foundApplyButton = false;
@@ -79,12 +69,9 @@ private slots:
         QVERIFY(foundApplyButton);
     }
 
-    // Test that applying parameters emits signal
     void testApplySignal() {
         QSignalSpy spy(parameterPanel, &ParameterPanel::parametersApplied);
         QVERIFY(spy.isValid());
-
-        // Find and click apply button
         QList<QPushButton*> buttons = parameterPanel->findChildren<QPushButton*>();
         for (QPushButton* button : buttons) {
             if (button->text().contains("Zastosuj")) {
@@ -93,19 +80,15 @@ private slots:
             }
         }
 
-        // Signal should be emitted
         QCOMPARE(spy.count(), 1);
     }
 
-    // Test that parameters are actually applied to FlowModel
     void testParametersAppliedToFlowModel() {
         QDoubleSpinBox* spinBox = parameterPanel->findChild<QDoubleSpinBox*>();
         QVERIFY(spinBox != nullptr);
 
-        // Set new flow coefficient
         spinBox->setValue(5.0);
 
-        // Click apply
         QList<QPushButton*> buttons = parameterPanel->findChildren<QPushButton*>();
         for (QPushButton* button : buttons) {
             if (button->text().contains("Zastosuj")) {
@@ -114,20 +97,16 @@ private slots:
             }
         }
 
-        // Check that FlowModel was updated
         QCOMPARE(flowModel->getFlowCoefficient(), 5.0f);
     }
 
-    // Test that max depth is applied to Grid
     void testMaxDepthAppliedToGrid() {
         QSlider* slider = parameterPanel->findChild<QSlider*>();
         QVERIFY(slider != nullptr);
 
-        // Set new depth
         float newDepth = 100.0f;
         slider->setValue(static_cast<int>(newDepth));
 
-        // Click apply
         QList<QPushButton*> buttons = parameterPanel->findChildren<QPushButton*>();
         for (QPushButton* button : buttons) {
             if (button->text().contains("Zastosuj")) {
@@ -136,7 +115,6 @@ private slots:
             }
         }
 
-        // Check that Grid was updated
         QCOMPARE(grid->getMaxDepth(), newDepth);
     }
 
@@ -148,6 +126,5 @@ private:
 };
 
 QTEST_MAIN(TestParameterPanel)
-// NOLINT - moc file is generated during build
 #include "test_parameterpanel_qt.moc"
 

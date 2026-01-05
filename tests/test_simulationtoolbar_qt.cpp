@@ -10,12 +10,7 @@
 #include "Renderer/OpenGLRenderer.h"
 
 /**
- * @brief Test suite for SimulationToolbar component
- *
- * Tests:
- * - Control actions (Play, Pause, Step, Reset)
- * - Cell info display updates
- * - Signal emissions
+ * @brief test suite for SimulationToolbar component
  */
 class TestSimulationToolbar : public QObject {
     Q_OBJECT
@@ -43,18 +38,15 @@ private slots:
         delete grid;
     }
 
-    // Test construction
     void testConstruction() {
         QVERIFY(toolbar != nullptr);
     }
 
-    // Test that toolbar has actions
     void testHasActions() {
         QList<QAction*> actions = toolbar->actions();
         QVERIFY(actions.size() > 0);
     }
 
-    // Test that Play action exists and triggers simulation
     void testPlayAction() {
         QList<QAction*> actions = toolbar->actions();
 
@@ -67,24 +59,17 @@ private slots:
         }
 
         QVERIFY(playAction != nullptr);
-
-        // Initially simulation should not be playing
         QVERIFY(!flowModel->isPlaying());
 
-        // Trigger play action
         playAction->trigger();
 
-        // Now simulation should be playing
         QVERIFY(flowModel->isPlaying());
     }
 
-    // Test that Pause action exists and stops simulation
     void testPauseAction() {
-        // Start simulation first
         flowModel->play();
         QVERIFY(flowModel->isPlaying());
 
-        // Find pause action
         QList<QAction*> actions = toolbar->actions();
         QAction* pauseAction = nullptr;
         for (QAction* action : actions) {
@@ -96,18 +81,14 @@ private slots:
 
         QVERIFY(pauseAction != nullptr);
 
-        // Trigger pause
         pauseAction->trigger();
 
-        // Simulation should be paused
         QVERIFY(!flowModel->isPlaying());
     }
 
-    // Test that Reset action exists and emits signal
     void testResetAction() {
         QSignalSpy spy(toolbar, &SimulationToolbar::statusMessageRequested);
 
-        // Find reset action
         QList<QAction*> actions = toolbar->actions();
         QAction* resetAction = nullptr;
         for (QAction* action : actions) {
@@ -119,18 +100,14 @@ private slots:
 
         QVERIFY(resetAction != nullptr);
 
-        // Trigger reset
         resetAction->trigger();
 
-        // Signal should be emitted
         QCOMPARE(spy.count(), 1);
     }
 
-    // Test that Step action exists and emits signal
     void testStepAction() {
         QSignalSpy spy(toolbar, &SimulationToolbar::statusMessageRequested);
 
-        // Find step action
         QList<QAction*> actions = toolbar->actions();
         QAction* stepAction = nullptr;
         for (QAction* action : actions) {
@@ -142,39 +119,31 @@ private slots:
 
         QVERIFY(stepAction != nullptr);
 
-        // Trigger step
         stepAction->trigger();
 
-        // Signal should be emitted
         QCOMPARE(spy.count(), 1);
     }
 
-    // Test that cell info label exists
     void testCellInfoLabel() {
         QLabel* label = toolbar->findChild<QLabel*>();
         QVERIFY(label != nullptr);
     }
 
-    // Test cell info display updates when cell is hovered
     void testCellInfoUpdate() {
         QLabel* label = toolbar->findChild<QLabel*>();
         QVERIFY(label != nullptr);
 
-        // Create a test cell
         Cell testCell;
         testCell.setTerrainHeight(10.0f);
         testCell.setWaterDepth(5.0f);
 
-        // Simulate cell hover signal from renderer
         emit renderer->cellHovered(5, 5, testCell);
 
-        // Process events to ensure signal is handled
         QTest::qWait(10);
 
-        // Label should contain position and height info
         QString labelText = label->text();
-        QVERIFY(labelText.contains("5"));  // Position
-        QVERIFY(labelText.contains("10"));  // Height
+        QVERIFY(labelText.contains("5"));
+        QVERIFY(labelText.contains("10"));
     }
 
 private:
@@ -185,6 +154,5 @@ private:
 };
 
 QTEST_MAIN(TestSimulationToolbar)
-// NOLINT - moc file is generated during build
 #include "test_simulationtoolbar_qt.moc"
 
