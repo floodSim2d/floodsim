@@ -18,6 +18,7 @@
 #include <QDebug>
 #include <QWidget>
 #include <QDoubleSpinBox>
+#include <QCheckBox>
 
 #include "../Simulation/Grid/Grid.h"
 #include "../Simulation/FlowModel/FlowModel.h"
@@ -216,6 +217,8 @@ void MainWindow::setupToolBar() {
     connect(resetAction, &QAction::triggered, this, [this]() {
         flowModel->stop();
         grid->clearHeightmap();
+        grid->updateHeightTexture();
+        renderer->update();
         statusBar()->showMessage("Symulacja zresetowana");
     });
 
@@ -263,7 +266,6 @@ QWidget* MainWindow::setupLeftPanel() {
         {"Przeszkoda", ToolType::Obstacle, "Narzędzie: Przeszkoda - kliknij aby umieścić przeszkodę"},
         {"Rzeka", ToolType::River, "Narzędzie: Rzeka - kliknij aby utworzyć rzekę"},
         {"Źródło wody", ToolType::WaterSource, "Narzędzie: Źródło wody - stałe źródło utrzymujące poziom wody"},
-        {"Deszcz", ToolType::Rain, "Narzędzie: Deszcz - obszar opadów dodający wodę podczas symulacji"},
         {"Gumka", ToolType::Eraser, "Narzędzie: Gumka - kliknij aby wyczyścić komórkę"}
     };
 
@@ -348,6 +350,31 @@ QWidget* MainWindow::setupRightPanel() {
     groupLayout->addWidget(apply);
 
     panelLayout->addWidget(grp);
+
+    // --- Pogoda (Deszcz) ---
+    auto *weatherGrp = new QGroupBox("Pogoda", panel);
+    auto *weatherLayout = new QVBoxLayout(weatherGrp);
+
+    auto *rainInfo = new QLabel("Symuluje opady na całej powierzchni mapy. Suwak określa przyrost wody w metrach na sekundę (max 0.5 m/s).", weatherGrp);
+    rainInfo->setWordWrap(true);
+    rainInfo->setStyleSheet("QLabel { color: #666; font-size: 11px; margin-bottom: 5px; }");
+    weatherLayout->addWidget(rainInfo);
+
+    auto *rainCheck = new QCheckBox("Globalny deszcz", weatherGrp);
+    weatherLayout->addWidget(rainCheck);
+
+    weatherLayout->addWidget(new QLabel("Intensywność opadów:", weatherGrp));
+    auto *rainSlider = new QSlider(Qt::Horizontal, weatherGrp);
+    rainSlider->setMinimum(0);
+    rainSlider->setMaximum(100);
+    rainSlider->setValue(0);
+    weatherLayout->addWidget(rainSlider);
+
+    auto *rainValueLabel = new QLabel("0.0", weatherGrp);
+    rainValueLabel->setAlignment(Qt::AlignCenter);
+    weatherLayout->addWidget(rainValueLabel);
+
+    panelLayout->addWidget(weatherGrp);
     panelLayout->addStretch();
 
     connect(depthSlider, &QSlider::valueChanged, this, [depthValueLabel](int value) {
@@ -364,6 +391,23 @@ QWidget* MainWindow::setupRightPanel() {
 
         statusBar()->showMessage(QString("Parametry zastosowane: K=%1, Max głębokość=%2")
             .arg(kValue, 0, 'f', 2).arg(newDepth, 0, 'f', 1));
+    });
+
+    // Rain connections
+    connect(rainCheck, &QCheckBox::toggled, this, [this](bool checked) {
+        flowModel->setGlobalRainEnabled(checked);
+        if (checked) {
+            statusBar()->showMessage("Włączono globalne opady deszczu");
+        } else {
+            statusBar()->showMessage("Wyłączono opady deszczu");
+        }
+    });
+
+    connect(rainSlider, &QSlider::valueChanged, this, [this, rainValueLabel](int value) {
+        // Map 0-100 slider to 0.0 - 0.5 intensity
+        float intensity = static_cast<float>(value) / 200.0f; 
+        flowModel->setGlobalRainIntensity(intensity);
+        rainValueLabel->setText(QString::number(intensity, 'f', 3));
     });
 
     return panel;

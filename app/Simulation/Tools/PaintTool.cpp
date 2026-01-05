@@ -124,11 +124,6 @@ void PaintTool::applySingleCell(Cell* cell) const {
             cell->setWaterDepth(std::max(cell->getWaterDepth(), cell->getSourceStrength()));
             break;
 
-        case ToolType::Rain:
-            cell->setType(RAIN);
-            cell->setRainIntensity(cell->getRainIntensity() + 0.1F);
-            break;
-
         case ToolType::Eraser:
             *cell = Cell();
             break;
