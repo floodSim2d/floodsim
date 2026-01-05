@@ -48,6 +48,25 @@ void PaintTool::applyTool(Grid* grid, const int centerX, const int centerY) cons
                 Cell* cell = grid->getCell(targetX, targetY);
                 if (cell != nullptr) {
                     applySingleCell(cell);
+
+                    //Capture states
+                    const float prevTerrain = cell->getTerrainHeight();
+                    const float prevWater = cell->getWaterDepth();
+                    const auto prevType = cell->getType();
+
+                    const float newTerrain = cell->getTerrainHeight();
+                    const float newWater = cell->getWaterDepth();
+                    const auto newType = cell->getType();
+
+                    // If anything changed, log it
+                    if (prevTerrain != newTerrain || prevWater != newWater || prevType != newType) {
+                        qDebug().nospace() << "Map change by tool="
+                                           << static_cast<int>(currentTool)
+                                           << " at (" << targetX << "," << targetY << "): "
+                                           << "type " << static_cast<int>(prevType) << "->" << static_cast<int>(newType)
+                                           << ", terrain " << prevTerrain << "->" << newTerrain
+                                           << ", water " << prevWater << "->" << newWater;
+                    }
                 }
             }
         }
@@ -130,6 +149,9 @@ void PaintTool::startContinuousPainting(Grid* grid, int gridX, int gridY) {
     currentPaintGridY = gridY;
     isContinuousPainting = true;
 
+    qDebug().nospace() << "Paint: START tool=" << static_cast<int>(currentTool)
+                       << " at (" << gridX << "," << gridY << ") brush=" << brushSize;
+
     // Apply immediately on start
     applyTool(grid, gridX, gridY);
     emit paintApplied();
@@ -153,6 +175,8 @@ void PaintTool::stopContinuousPainting() {
     isContinuousPainting = false;
     paintTimer->stop();
     currentGrid = nullptr;
+
+    qDebug() << "Paint: STOP";
 }
 
 void PaintTool::applyPaintAtCurrentPosition() {

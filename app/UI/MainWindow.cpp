@@ -42,7 +42,7 @@ MainWindow::MainWindow(QWidget *parent)
     // when paint tool applies paint we update the renderer to reflect changes
     connect(paintTool, &PaintTool::paintApplied, renderer, QOverload<>::of(&QWidget::update));
 
-    setWindowTitle("FloodSim — Symulator powodzi 2D");
+    setWindowTitle("FloodSim — Symulator powodzi 3D");
     setupMenuBar();
     setupToolBar();
     setupStatusBar();
