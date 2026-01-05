@@ -6,6 +6,7 @@
 #include <QDoubleSpinBox>
 #include <QSlider>
 #include <QPushButton>
+#include <QCheckBox>
 
 #include "../Simulation/Grid/Grid.h"
 #include "../Simulation/FlowModel/FlowModel.h"
@@ -55,6 +56,30 @@ void ParameterPanel::setupUI() {
     groupLayout->addWidget(applyButton);
 
     panelLayout->addWidget(groupBox);
+
+    auto* weatherGrp = new QGroupBox("Pogoda", this);
+    auto* weatherLayout = new QVBoxLayout(weatherGrp);
+
+    auto* rainInfo = new QLabel("Symuluje opady na całej powierzchni mapy. Suwak określa przyrost wody w metrach na sekundę (max 0.5 m/s).", weatherGrp);
+    rainInfo->setWordWrap(true);
+    rainInfo->setStyleSheet("QLabel { color: #666; font-size: 11px; margin-bottom: 5px; }");
+    weatherLayout->addWidget(rainInfo);
+
+    auto* rainCheck = new QCheckBox("Globalny deszcz", weatherGrp);
+    weatherLayout->addWidget(rainCheck);
+
+    weatherLayout->addWidget(new QLabel("Intensywność opadów:", weatherGrp));
+    auto* rainSlider = new QSlider(Qt::Horizontal, weatherGrp);
+    rainSlider->setMinimum(0);
+    rainSlider->setMaximum(100);
+    rainSlider->setValue(0);
+    weatherLayout->addWidget(rainSlider);
+
+    auto* rainValueLabel = new QLabel("0.0", weatherGrp);
+    rainValueLabel->setAlignment(Qt::AlignCenter);
+    weatherLayout->addWidget(rainValueLabel);
+
+    panelLayout->addWidget(weatherGrp);
     panelLayout->addStretch();
 
     connect(maxDepthSlider, &QSlider::valueChanged, this, [this](int value) {
@@ -62,6 +87,18 @@ void ParameterPanel::setupUI() {
     });
 
     connect(applyButton, &QPushButton::clicked, this, &ParameterPanel::applyParameters);
+
+    connect(rainCheck, &QCheckBox::toggled, this, [this](bool checked) {
+        flowModel->setGlobalRainEnabled(checked);
+        QString message = checked ? "Włączono globalne opady deszczu" : "Wyłączono opady deszczu";
+        emit parametersApplied(message);
+    });
+
+    connect(rainSlider, &QSlider::valueChanged, this, [this, rainValueLabel](int value) {
+        float intensity = static_cast<float>(value) / 200.0f;
+        flowModel->setGlobalRainIntensity(intensity);
+        rainValueLabel->setText(QString::number(intensity, 'f', 3));
+    });
 }
 
 void ParameterPanel::applyParameters() {
