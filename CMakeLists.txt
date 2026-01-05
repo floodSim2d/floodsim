@@ -14,6 +14,9 @@ find_package(Qt6 COMPONENTS
         OpenGLWidgets
         REQUIRED)
 
+# Enable testing
+enable_testing()
+
 # Add app and tests subprojects
 add_subdirectory(app)
 add_subdirectory(tests)
