@@ -17,7 +17,6 @@ class QSlider;
  */
 class ToolPanel : public QWidget {
     Q_OBJECT
-
 public:
     explicit ToolPanel(PaintTool* paintTool, QWidget* parent = nullptr);
     ~ToolPanel() override = default;

@@ -41,7 +41,6 @@ void ToolPanel::setupToolButtons() {
     std::vector<ToolButtonInfo> tools = {
         {"Kamera", ToolType::Camera, "Tryb kamery włączony - nawiguj sceną 3D"},
         {"Teren", ToolType::Terrain, "Narzędzie: Teren - kliknij aby podnieść teren"},
-        {"Przeszkoda", ToolType::Obstacle, "Narzędzie: Przeszkoda - kliknij aby umieścić przeszkodę"},
         {"Rzeka", ToolType::River, "Narzędzie: Rzeka - kliknij aby utworzyć rzekę"},
         {"Źródło wody", ToolType::WaterSource, "Narzędzie: Źródło wody - stałe źródło utrzymujące poziom wody"},
         {"Gumka", ToolType::Eraser, "Narzędzie: Gumka - kliknij aby wyczyścić komórkę"}
