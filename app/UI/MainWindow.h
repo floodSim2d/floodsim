@@ -1,3 +1,6 @@
+#ifndef MAINWINDOW_H
+#define MAINWINDOW_H
+
 #include <QMainWindow>
 #include <memory>
 
@@ -28,8 +31,8 @@ class FileMenuHandler;
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
-    MainWindow(QWidget *parent = nullptr);
-    ~MainWindow();
+    explicit MainWindow(QWidget *parent = nullptr);
+    ~MainWindow() override;
 
 private:
     void setupMenuBar();
@@ -50,3 +53,4 @@ private:
     FileMenuHandler* fileMenuHandler;
 };
 
+#endif // MAINWINDOW_H

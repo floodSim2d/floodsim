@@ -16,9 +16,8 @@ PaintTool::PaintTool(QObject* parent)
       currentPaintGridY(-1),
       isContinuousPainting(false) {
 
-    // Setup paint timer for continuous painting
     connect(paintTimer, &QTimer:: timeout, this, &PaintTool::applyPaintAtCurrentPosition);
-    paintTimer->setInterval(50);  // Apply paint every 50ms (20 times per second)
+    paintTimer->setInterval(50);  // apply paint every 50ms (20 times per second)
 }
 
 void PaintTool::setToolType(ToolType type) {
@@ -26,7 +25,7 @@ void PaintTool::setToolType(ToolType type) {
 }
 
 void PaintTool::setBrushSize(const int size) {
-    brushSize = std::max(1, std::min(10, size));  // Clamp between 1 and 10
+    brushSize = std::max(1, std::min(10, size));
 }
 
 void PaintTool::applyTool(Grid* grid, const int centerX, const int centerY) const {
