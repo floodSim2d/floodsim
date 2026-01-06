@@ -9,13 +9,14 @@ enum CellType : std::uint8_t {
     LAND,
     RIVER,
     WATER_SOURCE,
+    RAIN,
     OBSTACLE,
 };
 
 class Cell {
 public:
     explicit Cell(float height = 0.0F, float water_depth = 0.0F, bool is_obstacle = false, bool is_river = false,
-                  bool is_water_source = false, float river_capacity = 3.0F);
+                  bool is_water_source = false, float river_capacity = 3.0F, float source_strength = 1.0F);
 
     float getTerrainHeight() const { return terrainHeight; }
     void setTerrainHeight(float height);
@@ -30,11 +31,21 @@ public:
     CellType getType() const;
     void setType(CellType type);
 
-    // River channel capacity (max water depth before overflow)
-    // Note: riverCapacity is the LIMIT, waterDepth is the CURRENT amount
-    // When waterDepth > riverCapacity, the river overflows
+    // river channel capacity (max water depth before overflow)
+    // riverCapacity is the LIMIT, waterDepth is the CURRENT amount
+    // waterDepth > riverCapacity -> the river overflows
     float getRiverCapacity() const { return riverCapacity; }
     void setRiverCapacity(float capacity) { riverCapacity = std::max(0.0f, capacity); }
+
+    // water source properties
+    bool isWaterSource() const { return waterSource; }
+    float getSourceStrength() const { return sourceStrength; }
+    void setSourceStrength(float strength) { sourceStrength = std::max(0.0f, strength); }
+
+    // Rain area properties
+    bool isRainArea() const { return rainArea; }
+    float getRainIntensity() const { return rainIntensity; }
+    void setRainIntensity(float intensity) { rainIntensity = std::max(0.0f, intensity); }
 
     bool canFlowThrough() const { return !obstacle; }
     float getFlowCapacity() const;
@@ -57,7 +68,10 @@ private:
     bool obstacle;
     bool river;
     bool waterSource;
+    bool rainArea;
     float riverCapacity;
+    float sourceStrength;  // minimum water maintained by water source
+    float rainIntensity;   // water added per time step in rain areas
 };
 
 #endif  // FLOODSIM_CELL_H

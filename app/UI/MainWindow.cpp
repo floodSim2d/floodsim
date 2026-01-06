@@ -1,51 +1,87 @@
+
 #include "MainWindow.h"
 
 #include <QAction>
-#include <QFileDialog>
-#include <QGroupBox>
-#include <QLabel>
 #include <QMenuBar>
-#include <QPushButton>
-#include <QSlider>
-#include <QSpinBox>
+#include <QMessageBox>
 #include <QStatusBar>
-#include <QToolBar>
-#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QDebug>
 #include <QWidget>
 
+#include "../Utils/Logger.h"
 #include "../Simulation/Grid/Grid.h"
+#include "../Simulation/FlowModel/FlowModel.h"
+#include "../Simulation/Tools/PaintTool.h"
 #include "../Renderer/OpenGLRenderer.h"
+#include "ToolPanel.h"
+#include "ParameterPanel.h"
+#include "SimulationToolbar.h"
+#include "FileMenuHandler.h"
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent), renderer(nullptr), heightLabel(nullptr)
+    : QMainWindow(parent),
+      grid(std::make_unique<Grid>(200, 200, 1.0F, DEFAULT_WATER_DEPTH)),
+      flowModel(nullptr),
+      paintTool(nullptr),
+      renderer(nullptr),
+      toolPanel(nullptr),
+      parameterPanel(nullptr),
+      simulationToolbar(nullptr),
+      fileMenuHandler(nullptr)
 {
-    renderer = new OpenGLRenderer();
+    paintTool = new PaintTool(this);
+    renderer = new OpenGLRenderer(grid.get(), this);
+    flowModel = new FlowModel(grid.get(), this);
 
-    setWindowTitle("FloodSim — Symulator powodzi 2D");
+    renderer->setPaintTool(paintTool);
+
+    setWindowTitle("FloodSim — Symulator powodzi 3D");
+
     setupMenuBar();
-    setupToolBar();
-    setupStatusBar();
+    setupComponents();
+    connectSignals();
+}
 
-    auto *central = new QWidget(this);
-    setCentralWidget(central);
+MainWindow::~MainWindow() {
+    LOG("MainWindow destructor - start");
 
-    auto *mainLayout = new QHBoxLayout(central);
+    if (flowModel) {
+        LOG("Stopping simulation");
+        flowModel->stop();
+    }
 
-    QWidget *left  = setupLeftPanel();
-    QWidget *right = setupRightPanel();
+    // deleting any OpenGL resources
+    if (grid && renderer) {
+        LOG("Cleaning up OpenGL resources");
+        renderer->makeCurrent();
+        grid->cleanup();
+        renderer->doneCurrent();
+    }
 
-    // szerokości paneli jak na makiecie
-    left->setMinimumWidth(150);
-    right->setMinimumWidth(200);
+    LOG("Releasing grid");
+    grid.reset();
 
-    // dodanie do układu
-    mainLayout->addWidget(left);
-    mainLayout->addWidget(renderer, 1);
-    mainLayout->addWidget(right);
+    LOG("MainWindow destructor - end");
 }
 
 void MainWindow::setupMenuBar() {
-    // widok
+    QMenu* fileMenu = menuBar()->addMenu("Plik");
+
+    fileMenuHandler = new FileMenuHandler(grid.get(), renderer, this);
+
+    // File menu
+    QAction* newAction = fileMenu->addAction("Nowy");
+    QAction* openAction = fileMenu->addAction("Otwórz");
+    QAction* saveAction = fileMenu->addAction("Zapisz");
+    fileMenu->addSeparator();
+    fileMenu->addAction("Wyjście", this, &QMainWindow::close);
+
+    connect(newAction, &QAction::triggered, fileMenuHandler, &FileMenuHandler::handleNew);
+    connect(openAction, &QAction::triggered, fileMenuHandler, &FileMenuHandler::handleOpen);
+    connect(saveAction, &QAction::triggered, fileMenuHandler, &FileMenuHandler::handleSave);
+
+   // View menu
     QMenu* viewMenu = menuBar()->addMenu("&Widok");
     QAction* resetCameraAction = viewMenu->addAction("Resetuj kamerę");
 
@@ -53,277 +89,79 @@ void MainWindow::setupMenuBar() {
         renderer->resetCamera();
         statusBar()->showMessage("Kamera zresetowana");
     });
-
-    QMenu *file = menuBar()->addMenu("Plik");
-
-    QAction *newAct   = file->addAction("Nowy");
-    QAction *openAct  = file->addAction("Otwórz");
-    QAction *saveAct  = file->addAction("Zapisz");
-    file->addSeparator();
-    file->addAction("Wyjście", this, &QMainWindow::close);
-
-    // otwieranie plików
-    connect(openAct, &QAction::triggered, this, [this]() {
-        QString path = QFileDialog::getOpenFileName(
-            this, "Wczytaj mapę", "", "Mapa (*.map)"
-        );
-
-        if (!path.isEmpty()) {
-            auto const widthBefore = renderer->getGrid()->getWidth();
-            auto const heightBefore = renderer->getGrid()->getHeight();
-
-            renderer->getGrid()->loadHeightmap(path);
-            // reset camera if grid size changed
-            if (renderer->getGrid()->getWidth() != widthBefore || renderer->getGrid()->getHeight() != heightBefore) {
-                renderer->resetCamera();
-            }
-        }
-    });
-
-    // zapisywanie plików
-    connect(saveAct, &QAction::triggered, this, [this]() {
-        QString path = QFileDialog::getSaveFileName(
-            this, "Zapisz mapę", "", "Mapa (*.map)"
-        );
-
-        if (!path.isEmpty()) {
-            renderer->getGrid()->saveHeightmap(path);
-        }
-    });
-
-    // nowa mapa
-    connect(newAct, &QAction::triggered, this, [this]() {
-        renderer->getGrid()->clearHeightmap();
-    });
 }
 
-void MainWindow::setupToolBar() {
-    QToolBar *toolbar = addToolBar("Toolbar");
-    const QAction* playAction = toolbar->addAction("▶ Start");
-    const QAction* pauseAction = toolbar->addAction("⏸ Stop");
-    const QAction* stepAction = toolbar->addAction("⏭ Krok");
-    toolbar->addSeparator();
-    const QAction * resetAction = toolbar->addAction("Reset");
+void MainWindow::setupComponents() {
+    toolPanel = new ToolPanel(paintTool, this);
+    parameterPanel = new ParameterPanel(grid.get(), flowModel, renderer, this);
+    simulationToolbar = new SimulationToolbar(grid.get(), flowModel, renderer, this);
 
-    // Create height info label in toolbar
-    toolbar->addSeparator();
-    heightLabel = new QLabel("Wysokość: ---", this);
-    heightLabel->setStyleSheet("QLabel { padding: 5px; background-color: rgba(0, 0, 0, 0.1); border-radius: 3px; }");
-    heightLabel->setMinimumWidth(200);
-    toolbar->addWidget(heightLabel);
+    toolPanel->setMinimumWidth(150);
+    parameterPanel->setMinimumWidth(200);
 
-    // event listeners
-    connect(renderer, &OpenGLRenderer::cellHovered , this, [this](int gridX, int gridY, const Cell& cell) {
-        QString label = QString("Wysokość terenu: %1").arg(cell.getTerrainHeight(), 0, 'f', 2);
-        if (const auto waterDepth = cell.getWaterDepth(); waterDepth > 0.0F) {
-            label += QString(" | Głębokość wody: %1").arg(waterDepth, 0, 'f', 2);
-            label += QString(" | Całkowita wysokość: %1").arg(cell.getTotalHeight(), 0, 'f', 2);
-        }
-        if (const auto velocity = cell.getVelocity(); velocity.length() > 0.01F) {
-            label += QString(" | Prędkość wody: (%1, %2)").arg(velocity.x(), 0, 'f', 2).arg(velocity.y(), 0, 'f', 2);
-        }
+    addToolBar(simulationToolbar);
 
-        // Additional flags
-        if (cell.getType() == OBSTACLE) {
-            label += QString(" | Przeszkoda");
-        }
-        if (cell.getType() == RIVER) {
-            label += QString(" | Rzeka");
-        }
-        if (cell.getType() == WATER_SOURCE) {
-            label += QString(" | Źródło wody");
-        }
-        if (cell.getWaterDepth() > cell.getRiverCapacity()) {
-            label += QString(" | Przelew wody!");
-        }
-        heightLabel->setText(QString("Pozycja: (%1, %2) | %3").arg(gridX).arg(gridY).arg(label));
-    });
+    auto* central = new QWidget(this);
+    setCentralWidget(central);
 
-    connect(resetAction, &QAction::triggered, this, [this]() {
-       statusBar()->showMessage("Symulacja zresetowana");
-   });
+    auto* mainLayout = new QHBoxLayout(central);
+    mainLayout->addWidget(toolPanel);
+    mainLayout->addWidget(renderer, 1);  // Stretch factor 1
+    mainLayout->addWidget(parameterPanel);
 
-    connect(playAction, &QAction::triggered, this, [this]() { statusBar()->showMessage("Symulacja uruchomiona"); });
-
-    connect(pauseAction, &QAction::triggered, this, [this]() { statusBar()->showMessage("Symulacja zatrzymana"); });
-
-    connect(stepAction, &QAction::triggered, this, [this]() { statusBar()->showMessage("Krok symulacji"); });
-
-}
-
-void MainWindow::setupStatusBar() {
     statusBar()->showMessage("Gotowe");
+}
 
+void MainWindow::connectSignals() {
+    // FlowModel signals
+    connect(flowModel, &FlowModel::simulationStarted, this, [this]() {
+        statusBar()->showMessage("Symulacja uruchomiona");
+    });
 
+    connect(flowModel, &FlowModel::simulationPaused, this, [this]() {
+        statusBar()->showMessage("Symulacja wstrzymana");
+    });
+
+    connect(flowModel, &FlowModel::simulationStopped, this, [this]() {
+        statusBar()->showMessage("Symulacja zatrzymana");
+    });
+
+    connect(flowModel, &FlowModel::stepCompleted, this, [this]() {
+        renderer->update();
+    });
+
+    // PaintTool signals
+    connect(paintTool, &PaintTool::paintApplied, renderer, QOverload<>::of(&QWidget::update));
+
+    // ToolPanel signals
+    connect(toolPanel, &ToolPanel::toolSelected, this, [this](const QString& message, bool isCameraMode) {
+        renderer->setCameraPanEnabled(isCameraMode);
+        statusBar()->showMessage(message);
+    });
+
+    // ParameterPanel signals
+    connect(parameterPanel, &ParameterPanel::parametersApplied, this, [this](const QString& message) {
+        statusBar()->showMessage(message);
+    });
+
+    // SimulationToolbar signals
+    connect(simulationToolbar, &SimulationToolbar::statusMessageRequested, this, [this](const QString& message) {
+        statusBar()->showMessage(message);
+    });
+
+    // FileMenuHandler signals
+    connect(fileMenuHandler, &FileMenuHandler::statusMessageRequested, this, [this](const QString& message) {
+        statusBar()->showMessage(message);
+    });
+
+    connect(fileMenuHandler, &FileMenuHandler::errorMessageRequested, this,
+            [this](const QString& title, const QString& message) {
+        QMessageBox::warning(this, title, message);
+    });
+
+    // Renderer signals
     connect(renderer, &OpenGLRenderer::cellClicked, this, [this](int gridX, int gridY) {
         statusBar()->showMessage(QString("Kliknięto komórkę: (%1, %2)").arg(gridX).arg(gridY));
     });
 }
 
-QWidget* MainWindow::setupLeftPanel() {
-    auto *panel = new QWidget(this);
-    auto *layout = new QVBoxLayout(panel);
-
-    layout->addWidget(new QLabel("Narzędzia:", panel));
-    layout->addSpacing(10);
-
-    // Tool button configuration
-    struct ToolButton {
-        QPushButton* button;
-        ToolType type;
-        QString message;
-    };
-
-    // Create buttons
-    auto *btnCameraPan = new QPushButton("Kamera", panel);
-    auto *btnTerrain = new QPushButton("Teren", panel);
-    auto *btnObstacle = new QPushButton("Przeszkoda", panel);
-    auto *btnRiver = new QPushButton("Rzeka", panel);
-    auto *btnRain = new QPushButton("Źródło wody", panel);
-    auto *btnEraser = new QPushButton("Gumka", panel);
-
-    // Configure tool buttons with their types and messages
-    std::vector<ToolButton> toolButtons = {
-        {btnCameraPan, ToolType::Camera, "Tryb kamery włączony - przeciągnij aby przesunąć widok"},
-        {btnTerrain, ToolType::Terrain, "Narzędzie: Teren - kliknij aby podnieść teren"},
-        {btnObstacle, ToolType::Obstacle, "Narzędzie: Przeszkoda - kliknij aby umieścić przeszkodę"},
-        {btnRiver, ToolType::River, "Narzędzie: Rzeka - kliknij aby utworzyć rzekę"},
-        {btnRain, ToolType::WaterSource, "Narzędzie: Źródło wody - kliknij aby dodać źródło wody"},
-        {btnEraser, ToolType::Eraser, "Narzędzie: Gumka - kliknij aby wyczyścić komórkę"}
-    };
-
-    // Setup all buttons
-    for (auto& toolBtn : toolButtons) {
-        toolBtn.button->setCheckable(true);
-        toolBtn.button->setStyleSheet(
-            "QPushButton { padding: 8px; font-weight: bold; }"
-            "QPushButton:checked { background-color: #4CAF50; color: white; }"
-        );
-        layout->addWidget(toolBtn.button);
-    }
-
-    // Brush size slider
-    layout->addSpacing(10);
-    auto *brushSizeLabel = new QLabel("Rozmiar pędzla:", panel);
-    layout->addWidget(brushSizeLabel);
-
-    auto *brushSizeSlider = new QSlider(Qt::Horizontal, panel);
-    brushSizeSlider->setMinimum(1);
-    brushSizeSlider->setMaximum(10);
-    brushSizeSlider->setValue(1);
-    brushSizeSlider->setTickPosition(QSlider::TicksBelow);
-    brushSizeSlider->setTickInterval(1);
-    layout->addWidget(brushSizeSlider);
-
-    auto *brushSizeValueLabel = new QLabel("1", panel);
-    brushSizeValueLabel->setAlignment(Qt::AlignCenter);
-    layout->addWidget(brushSizeValueLabel);
-
-    layout->addStretch();
-
-    connect(brushSizeSlider, &QSlider::valueChanged, this, [this, brushSizeValueLabel](int value) {
-        renderer->getPaintTool()->setBrushSize(value);
-        brushSizeValueLabel->setText(QString::number(value));
-    });
-
-    // Connect all tool buttons with a loop
-    for (const auto& toolBtn : toolButtons) {
-        if (toolBtn.type == ToolType::Camera) {
-            // Special handling for camera button
-            connect(toolBtn.button, &QPushButton::toggled, this, [this, toolButtons, toolBtn](bool checked) {
-                renderer->setCameraPanEnabled(checked);
-                if (checked) {
-                    for (const auto& btn : toolButtons) {
-                        if (btn.type != ToolType::Camera) {
-                            btn.button->setChecked(false);
-                        }
-                    }
-                    renderer->getPaintTool()->setToolType(ToolType::Camera);
-                    statusBar()->showMessage(toolBtn.message);
-                }
-            });
-        } else {
-            // Paint tool buttons
-            connect(toolBtn.button, &QPushButton::clicked, this, [this, toolButtons, currentTool = toolBtn](bool) {
-                // Disable camera mode
-                toolButtons[0].button->setChecked(false);
-                renderer->setCameraPanEnabled(false);
-
-                renderer->getPaintTool()->setToolType(currentTool.type);
-
-                for (const auto& btn : toolButtons) {
-                    btn.button->setChecked(btn.button == currentTool.button);
-                }
-
-                statusBar()->showMessage(currentTool.message);
-            });
-        }
-    }
-
-    return panel;
-}
-
-QWidget* MainWindow::setupRightPanel() {
-    auto *panel = new QWidget(this);
-    panel->setAutoFillBackground(true);
-
-    auto *panelLayout = new QVBoxLayout(panel);
-
-    auto *grp = new QGroupBox("Parametry", panel);
-    auto *groupLayout = new QVBoxLayout(grp);
-
-    auto *spinK = new QDoubleSpinBox(grp);
-    spinK->setRange(0, 100);
-    spinK->setValue(1);
-
-    groupLayout->addWidget(new QLabel("K:", grp));
-    groupLayout->addWidget(spinK);
-
-    // Max depth control with slider
-    groupLayout->addWidget(new QLabel("Max głębokość:", grp));
-
-    auto *depthSlider = new QSlider(Qt::Horizontal, grp);
-    depthSlider->setMinimum(MIN_WATER_DEPTH);
-    depthSlider->setMaximum(MAX_WATER_DEPTH);
-    // Use default value (50) since Grid isn't initialized yet in constructor
-    // Grid is created in initializeGL() which is called after MainWindow constructor
-    depthSlider->setValue(DEFAULT_WATER_DEPTH);
-    depthSlider->setTickPosition(QSlider::TicksBelow);
-    depthSlider->setTickInterval(10);
-    groupLayout->addWidget(depthSlider);
-
-    auto *depthValueLabel = new QLabel(QString::number(depthSlider->value()), grp);
-    depthValueLabel->setAlignment(Qt::AlignCenter);
-    groupLayout->addWidget(depthValueLabel);
-
-    auto *apply = new QPushButton("Zastosuj", grp);
-    groupLayout->addWidget(apply);
-
-    panelLayout->addWidget(grp);
-    panelLayout->addStretch();
-
-    // Update label when slider moves (but don't apply yet)
-    connect(depthSlider, &QSlider::valueChanged, this, [depthValueLabel](int value) {
-        depthValueLabel->setText(QString::number(value));
-    });
-
-    // Apply changes only when button is clicked
-    connect(apply, &QPushButton::clicked, this, [this, spinK, depthSlider]() {
-        // Apply K value
-        const auto kValue = static_cast<float>(spinK->value());
-
-        // Apply maxDepth value
-        const auto newDepth = static_cast<float>(depthSlider->value());
-
-        auto* grid = renderer->getGrid();
-
-        if (grid != nullptr) {
-            grid->setMaxDepth(newDepth);
-            renderer->updateProjectionMatrix();
-            statusBar()->showMessage(QString("Parametry zastosowane: K=%1, Max głębokość=%2")
-            .arg(kValue, 0, 'f', 2).arg(newDepth, 0, 'f', 1));
-        }
-    });
-
-    return panel;
-}

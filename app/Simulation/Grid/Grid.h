@@ -22,6 +22,7 @@ class Grid {
     ~Grid();
 
     void initialize(QOpenGLFunctions* gl_context);
+    void cleanup();  // ← DODANE - czyści zasoby OpenGL
     void render(const QMatrix4x4& projection, const QMatrix4x4& view) const;
 
     // getters setters
@@ -35,13 +36,13 @@ class Grid {
     void setMaxDepth(const float depth) { maxDepth = depth; }
 
     void saveHeightmap(const QString& filename) const;
-    void loadHeightmap(const QString& filename);
+    [[nodiscard]] bool loadHeightmap(const QString& filename);
     void clearHeightmap(const Cell& defaultCell = Cell());
-    void updateHeightTexture() const;
+    void updateHeightTexture();
 
     // utils
-    bool isValidPosition(int x, int y) const;
-    QVector2D worldPosToGrid(const QVector2D& worldPos) const;
+    [[nodiscard]] bool isValidPosition(int x, int y) const;
+    [[nodiscard]] QVector2D worldPosToGrid(const QVector2D& worldPos) const;
 
    private:
     void createMesh();
@@ -55,6 +56,16 @@ class Grid {
     QOpenGLBuffer* indexBuffer;   // EBO
     QOpenGLVertexArrayObject* VAO;
     QOpenGLTexture* heightTexture;
+
+    // PBO for async texture uploads (double buffering)
+    QOpenGLBuffer* pbo[2];
+    int currentPboIndex;
+    size_t pboSize;
+
+    void createPBOs();
+    void destroyPBOs();
+
+    void rollbackToSize(unsigned int originalWidth, unsigned int originalHeight, bool recreateTexture);
 
     // grid data
     unsigned int width;

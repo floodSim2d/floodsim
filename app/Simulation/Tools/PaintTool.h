@@ -1,7 +1,6 @@
 #ifndef FLOODSIM_PAINTTOOL_H
 #define FLOODSIM_PAINTTOOL_H
 
-#include <cstdint>
 #include <QTimer>
 #include <QObject>
 
@@ -38,8 +37,8 @@ public:
     void stopContinuousPainting();
     [[nodiscard]] bool isPainting() const { return isContinuousPainting; }
 
-signals:
-    void paintApplied();  // Emitted when paint is applied (for triggering UI updates)
+    signals:
+        void paintApplied();  // Emitted when paint is applied (for triggering UI updates)
 
 private slots:
     void applyPaintAtCurrentPosition();
@@ -59,4 +58,3 @@ private:
 };
 
 #endif  // FLOODSIM_PAINTTOOL_H
-

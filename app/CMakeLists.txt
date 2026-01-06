@@ -2,6 +2,14 @@ add_executable(floodsim
         main.cpp
         UI/MainWindow.h
         UI/MainWindow.cpp
+        UI/ToolPanel.h
+        UI/ToolPanel.cpp
+        UI/ParameterPanel.h
+        UI/ParameterPanel.cpp
+        UI/SimulationToolbar.h
+        UI/SimulationToolbar.cpp
+        UI/FileMenuHandler.h
+        UI/FileMenuHandler.cpp
         Simulation/Grid/Grid.cpp
         Simulation/Grid/Grid.h
         Renderer/OpenGLRenderer.h
@@ -10,6 +18,9 @@ add_executable(floodsim
         Simulation/Grid/Cell.h
         Simulation/Tools/PaintTool.h
         Simulation/Tools/PaintTool.cpp
+        Simulation/FlowModel/FlowModel.h
+        Simulation/FlowModel/FlowModel.cpp
+        Utils/Logger.h
 )
 
 target_link_libraries(floodsim PRIVATE

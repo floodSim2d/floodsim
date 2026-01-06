@@ -4,6 +4,7 @@
 #include "../Grid/Grid.h"
 #include <algorithm>
 
+#include "../../Utils/Logger.h"
 #include "../../Renderer/OpenGLRenderer.h"
 
 PaintTool::PaintTool(QObject* parent)
@@ -16,9 +17,8 @@ PaintTool::PaintTool(QObject* parent)
       currentPaintGridY(-1),
       isContinuousPainting(false) {
 
-    // Setup paint timer for continuous painting
-    connect(paintTimer, &QTimer::timeout, this, &PaintTool::applyPaintAtCurrentPosition);
-    paintTimer->setInterval(50);  // Apply paint every 50ms (20 times per second)
+    connect(paintTimer, &QTimer:: timeout, this, &PaintTool::applyPaintAtCurrentPosition);
+    paintTimer->setInterval(50);  // apply paint every 50ms (20 times per second)
 }
 
 void PaintTool::setToolType(ToolType type) {
@@ -26,11 +26,11 @@ void PaintTool::setToolType(ToolType type) {
 }
 
 void PaintTool::setBrushSize(const int size) {
-    brushSize = std::max(1, std::min(10, size));  // Clamp between 1 and 10
+    brushSize = std::max(1, std::min(10, size));
 }
 
 void PaintTool::applyTool(Grid* grid, const int centerX, const int centerY) const {
-    if (grid == nullptr || currentTool == ToolType::Camera) {
+    if (grid == nullptr || currentTool == ToolType:: Camera) {
         return;
     }
 
@@ -48,6 +48,24 @@ void PaintTool::applyTool(Grid* grid, const int centerX, const int centerY) cons
                 Cell* cell = grid->getCell(targetX, targetY);
                 if (cell != nullptr) {
                     applySingleCell(cell);
+
+                    //Capture states
+                    const float prevTerrain = cell->getTerrainHeight();
+                    const float prevWater = cell->getWaterDepth();
+                    const auto prevType = cell->getType();
+
+                    const float newTerrain = cell->getTerrainHeight();
+                    const float newWater = cell->getWaterDepth();
+                    const auto newType = cell->getType();
+
+                    if (prevTerrain != newTerrain || prevWater != newWater || prevType != newType) {
+                        LOG(QString("Map change by tool=%1 at (%2,%3): type %4->%5, terrain %6->%7, water %8->%9")
+                            .arg(static_cast<int>(currentTool))
+                            .arg(targetX).arg(targetY)
+                            .arg(static_cast<int>(prevType)).arg(static_cast<int>(newType))
+                            .arg(prevTerrain).arg(newTerrain)
+                            .arg(prevWater).arg(newWater));
+                    }
                 }
             }
         }
@@ -64,52 +82,48 @@ void PaintTool::applySingleCell(Cell* cell) const {
 
     switch (currentTool) {
         case ToolType::Terrain:
-            if (cell->getType() != LAND) {
-                cell->setType(LAND);
-            }
+            // POPRAWIONE - Teren nadpisuje wszystko
+            cell->setType(LAND);
             cell->setTerrainHeight(std::min(cell->getTerrainHeight() + 0.5F, CAMERA_MAX_HEIGHT));
+            // Usuń wodę gdy budujesz teren
+            cell->setWaterDepth(0.0F);
+            cell->setSourceStrength(0.0F);
+            cell->setRainIntensity(0.0F);
             break;
 
-        case ToolType::Obstacle:
+        case ToolType:: Obstacle:
             if (cell->getType() != OBSTACLE) {
                 cell->setType(OBSTACLE);
             }
             break;
 
         case ToolType::River:
-            if (cell->getType() != RIVER) {
-                cell->setType(RIVER);
+        {
+            // POPRAWIONE - Rzeka tworzy wgłębienie z wodą
+            cell->setType(RIVER);
+
+            // Zawsze obniżaj teren tworząc wgłębienie
+            const float newHeight = cell->getTerrainHeight() - 0.5F;
+            if (newHeight >= -1.0F * currentGrid->getMaxDepth()) {
+                cell->setTerrainHeight(newHeight);
             }
+
+            // Dodaj wodę do rzeki
             if (cell->getWaterDepth() < cell->getRiverCapacity()) {
-                // Fill water up to river capacity
-                cell->setWaterDepth(std::min(cell->getWaterDepth() + 1.0F, cell->getRiverCapacity()));
-            } else {
-                // When water is at capacity, dig the terrain deeper (allow negative terrain)
-                // This creates deeper river channels/lakes
-                const float newHeight = cell->getTerrainHeight() - 0.5F;
-                if (newHeight >= -1.0F * currentGrid->getMaxDepth()) {
-                    cell->setTerrainHeight(newHeight);
-                }
+                cell->setWaterDepth(std::min(cell->getWaterDepth() + 0.5F, cell->getRiverCapacity()));
             }
             break;
+        }
 
         case ToolType::WaterSource:
-            cell->setType(WATER_SOURCE);
-            if (cell->getWaterDepth() < cell->getRiverCapacity()) {
-                // Fill water up to river capacity
-                cell->setWaterDepth(std::min(cell->getWaterDepth() + 1.0F, cell->getRiverCapacity()));
-            } else {
-                // When water is at capacity, dig the terrain deeper (allow negative terrain)
-                // This creates deeper water sources/lakes
-                const float newHeight = cell->getTerrainHeight() - 0.5F;
-                if (newHeight >= -1.0F * currentGrid->getMaxDepth()) {
-                    cell->setTerrainHeight(newHeight);
-                }
+            if (cell->getType() != WATER_SOURCE) {
+                cell->setType(WATER_SOURCE);
             }
+            cell->setSourceStrength(cell->getSourceStrength() + 0.2F);
+            cell->setWaterDepth(std::max(cell->getWaterDepth(), cell->getSourceStrength()));
             break;
 
         case ToolType::Eraser:
-            // Reset cell to default
             *cell = Cell();
             break;
 
@@ -129,11 +143,14 @@ void PaintTool::startContinuousPainting(Grid* grid, int gridX, int gridY) {
     currentPaintGridY = gridY;
     isContinuousPainting = true;
 
-    // Apply immediately on start
+    LOG(QString("Paint: START tool=%1 at (%2,%3) brush=%4")
+        .arg(static_cast<int>(currentTool))
+        .arg(gridX).arg(gridY)
+        .arg(brushSize));
+
     applyTool(grid, gridX, gridY);
     emit paintApplied();
 
-    // Start timer for continuous painting
     paintTimer->start();
 }
 
@@ -142,7 +159,7 @@ void PaintTool::updatePaintPosition(int gridX, int gridY) {
     currentPaintGridY = gridY;
 
     // Apply immediately when position updates
-    if (isContinuousPainting && currentGrid) {
+    if (isContinuousPainting && currentGrid != nullptr) {
         applyTool(currentGrid, gridX, gridY);
         emit paintApplied();
     }
@@ -152,10 +169,12 @@ void PaintTool::stopContinuousPainting() {
     isContinuousPainting = false;
     paintTimer->stop();
     currentGrid = nullptr;
+
+    LOG("Paint: STOP");
 }
 
 void PaintTool::applyPaintAtCurrentPosition() {
-    if (!isContinuousPainting || !currentGrid) {
+    if (!isContinuousPainting || currentGrid == nullptr) {
         return;
     }
 
@@ -164,4 +183,3 @@ void PaintTool::applyPaintAtCurrentPosition() {
         emit paintApplied();
     }
 }
-

@@ -1,4 +1,5 @@
 #include <QApplication>
+#include <QSurfaceFormat>
 #include "UI/MainWindow.h"
 
 int main(int argc, char *argv[]) {
@@ -7,10 +8,10 @@ int main(int argc, char *argv[]) {
     format.setProfile(QSurfaceFormat::CoreProfile);
     QSurfaceFormat::setDefaultFormat(format);
 
-    QApplication a(argc, argv);
+    QApplication app(argc, argv);
 
-    MainWindow w;
-    w.showMaximized();
+    MainWindow window;
+    window.showMaximized();
 
-    return a.exec();
+    return app.exec();
 }
