@@ -4,6 +4,7 @@
 #include "../Grid/Grid.h"
 #include <algorithm>
 
+#include "../../Utils/Logger.h"
 #include "../../Renderer/OpenGLRenderer.h"
 
 PaintTool::PaintTool(QObject* parent)
@@ -57,14 +58,13 @@ void PaintTool::applyTool(Grid* grid, const int centerX, const int centerY) cons
                     const float newWater = cell->getWaterDepth();
                     const auto newType = cell->getType();
 
-                    // If anything changed, log it
                     if (prevTerrain != newTerrain || prevWater != newWater || prevType != newType) {
-                        qDebug().nospace() << "Map change by tool="
-                                           << static_cast<int>(currentTool)
-                                           << " at (" << targetX << "," << targetY << "): "
-                                           << "type " << static_cast<int>(prevType) << "->" << static_cast<int>(newType)
-                                           << ", terrain " << prevTerrain << "->" << newTerrain
-                                           << ", water " << prevWater << "->" << newWater;
+                        LOG(QString("Map change by tool=%1 at (%2,%3): type %4->%5, terrain %6->%7, water %8->%9")
+                            .arg(static_cast<int>(currentTool))
+                            .arg(targetX).arg(targetY)
+                            .arg(static_cast<int>(prevType)).arg(static_cast<int>(newType))
+                            .arg(prevTerrain).arg(newTerrain)
+                            .arg(prevWater).arg(newWater));
                     }
                 }
             }
@@ -143,14 +143,14 @@ void PaintTool::startContinuousPainting(Grid* grid, int gridX, int gridY) {
     currentPaintGridY = gridY;
     isContinuousPainting = true;
 
-    qDebug().nospace() << "Paint: START tool=" << static_cast<int>(currentTool)
-                       << " at (" << gridX << "," << gridY << ") brush=" << brushSize;
+    LOG(QString("Paint: START tool=%1 at (%2,%3) brush=%4")
+        .arg(static_cast<int>(currentTool))
+        .arg(gridX).arg(gridY)
+        .arg(brushSize));
 
-    // Apply immediately on start
     applyTool(grid, gridX, gridY);
     emit paintApplied();
 
-    // Start timer for continuous painting
     paintTimer->start();
 }
 
@@ -170,7 +170,7 @@ void PaintTool::stopContinuousPainting() {
     paintTimer->stop();
     currentGrid = nullptr;
 
-    qDebug() << "Paint: STOP";
+    LOG("Paint: STOP");
 }
 
 void PaintTool::applyPaintAtCurrentPosition() {

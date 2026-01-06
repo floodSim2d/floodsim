@@ -20,6 +20,7 @@ add_executable(floodsim
         Simulation/Tools/PaintTool.cpp
         Simulation/FlowModel/FlowModel.h
         Simulation/FlowModel/FlowModel.cpp
+        Utils/Logger.h
 )
 
 target_link_libraries(floodsim PRIVATE

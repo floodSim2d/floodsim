@@ -9,6 +9,7 @@
 #include <QDebug>
 #include <QWidget>
 
+#include "../Utils/Logger.h"
 #include "../Simulation/Grid/Grid.h"
 #include "../Simulation/FlowModel/FlowModel.h"
 #include "../Simulation/Tools/PaintTool.h"
@@ -43,25 +44,25 @@ MainWindow::MainWindow(QWidget *parent)
 }
 
 MainWindow::~MainWindow() {
-    qDebug() << "MainWindow destructor - start";
+    LOG("MainWindow destructor - start");
 
     if (flowModel) {
-        qDebug() << "Stopping simulation";
+        LOG("Stopping simulation");
         flowModel->stop();
     }
 
     // deleting any OpenGL resources
     if (grid && renderer) {
-        qDebug() << "Cleaning up OpenGL resources";
+        LOG("Cleaning up OpenGL resources");
         renderer->makeCurrent();
         grid->cleanup();
         renderer->doneCurrent();
     }
 
-    qDebug() << "Releasing grid";
+    LOG("Releasing grid");
     grid.reset();
 
-    qDebug() << "MainWindow destructor - end";
+    LOG("MainWindow destructor - end");
 }
 
 void MainWindow::setupMenuBar() {
