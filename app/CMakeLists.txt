@@ -2,6 +2,14 @@ add_executable(floodsim
         main.cpp
         UI/MainWindow.h
         UI/MainWindow.cpp
+        UI/ToolPanel.h
+        UI/ToolPanel.cpp
+        UI/ParameterPanel.h
+        UI/ParameterPanel.cpp
+        UI/SimulationToolbar.h
+        UI/SimulationToolbar.cpp
+        UI/FileMenuHandler.h
+        UI/FileMenuHandler.cpp
         Simulation/Grid/Grid.cpp
         Simulation/Grid/Grid.h
         Renderer/OpenGLRenderer.h

@@ -1,0 +1,118 @@
+#include "ParameterPanel.h"
+
+#include <QVBoxLayout>
+#include <QGroupBox>
+#include <QLabel>
+#include <QDoubleSpinBox>
+#include <QSlider>
+#include <QPushButton>
+#include <QCheckBox>
+
+#include "../Simulation/Grid/Grid.h"
+#include "../Simulation/FlowModel/FlowModel.h"
+#include "../Renderer/OpenGLRenderer.h"
+
+ParameterPanel::ParameterPanel(Grid* grid, FlowModel* flowModel, OpenGLRenderer* renderer, QWidget* parent)
+    : QWidget(parent),
+      grid(grid),
+      flowModel(flowModel),
+      renderer(renderer),
+      flowCoefficientSpinBox(nullptr),
+      maxDepthSlider(nullptr),
+      depthValueLabel(nullptr)
+{
+    setAutoFillBackground(true);
+    setupUI();
+}
+
+void ParameterPanel::setupUI() {
+    auto* panelLayout = new QVBoxLayout(this);
+
+    auto* groupBox = new QGroupBox("Parametry", this);
+    auto* groupLayout = new QVBoxLayout(groupBox);
+
+    flowCoefficientSpinBox = new QDoubleSpinBox(groupBox);
+    flowCoefficientSpinBox->setRange(0, 100);
+    flowCoefficientSpinBox->setValue(1);
+
+    groupLayout->addWidget(new QLabel("K:", groupBox));
+    groupLayout->addWidget(flowCoefficientSpinBox);
+
+    groupLayout->addWidget(new QLabel("Max głębokość:", groupBox));
+
+    maxDepthSlider = new QSlider(Qt::Horizontal, groupBox);
+    maxDepthSlider->setMinimum(MIN_WATER_DEPTH);
+    maxDepthSlider->setMaximum(MAX_WATER_DEPTH);
+    maxDepthSlider->setValue(DEFAULT_WATER_DEPTH);
+    maxDepthSlider->setTickPosition(QSlider::TicksBelow);
+    maxDepthSlider->setTickInterval(10);
+    groupLayout->addWidget(maxDepthSlider);
+
+    depthValueLabel = new QLabel(QString::number(maxDepthSlider->value()), groupBox);
+    depthValueLabel->setAlignment(Qt::AlignCenter);
+    groupLayout->addWidget(depthValueLabel);
+
+    auto* applyButton = new QPushButton("Zastosuj", groupBox);
+    groupLayout->addWidget(applyButton);
+
+    panelLayout->addWidget(groupBox);
+
+    auto* weatherGrp = new QGroupBox("Pogoda", this);
+    auto* weatherLayout = new QVBoxLayout(weatherGrp);
+
+    auto* rainInfo = new QLabel("Symuluje opady na całej powierzchni mapy. Suwak określa przyrost wody w metrach na sekundę (max 0.5 m/s).", weatherGrp);
+    rainInfo->setWordWrap(true);
+    rainInfo->setStyleSheet("QLabel { color: #666; font-size: 11px; margin-bottom: 5px; }");
+    weatherLayout->addWidget(rainInfo);
+
+    auto* rainCheck = new QCheckBox("Globalny deszcz", weatherGrp);
+    weatherLayout->addWidget(rainCheck);
+
+    weatherLayout->addWidget(new QLabel("Intensywność opadów:", weatherGrp));
+    auto* rainSlider = new QSlider(Qt::Horizontal, weatherGrp);
+    rainSlider->setMinimum(0);
+    rainSlider->setMaximum(100);
+    rainSlider->setValue(0);
+    weatherLayout->addWidget(rainSlider);
+
+    auto* rainValueLabel = new QLabel("0.0", weatherGrp);
+    rainValueLabel->setAlignment(Qt::AlignCenter);
+    weatherLayout->addWidget(rainValueLabel);
+
+    panelLayout->addWidget(weatherGrp);
+    panelLayout->addStretch();
+
+    connect(maxDepthSlider, &QSlider::valueChanged, this, [this](int value) {
+        depthValueLabel->setText(QString::number(value));
+    });
+
+    connect(applyButton, &QPushButton::clicked, this, &ParameterPanel::applyParameters);
+
+    connect(rainCheck, &QCheckBox::toggled, this, [this](bool checked) {
+        flowModel->setGlobalRainEnabled(checked);
+        QString message = checked ? "Włączono globalne opady deszczu" : "Wyłączono opady deszczu";
+        emit parametersApplied(message);
+    });
+
+    connect(rainSlider, &QSlider::valueChanged, this, [this, rainValueLabel](int value) {
+        float intensity = static_cast<float>(value) / 200.0f;
+        flowModel->setGlobalRainIntensity(intensity);
+        rainValueLabel->setText(QString::number(intensity, 'f', 3));
+    });
+}
+
+void ParameterPanel::applyParameters() {
+    const auto kValue = static_cast<float>(flowCoefficientSpinBox->value());
+    flowModel->setFlowCoefficient(kValue);
+
+    const auto newDepth = static_cast<float>(maxDepthSlider->value());
+    grid->setMaxDepth(newDepth);
+    renderer->updateProjectionMatrix();
+
+    QString message = QString("Parametry zastosowane: K=%1, Max głębokość=%2")
+        .arg(kValue, 0, 'f', 2)
+        .arg(newDepth, 0, 'f', 1);
+
+    emit parametersApplied(message);
+}
+
