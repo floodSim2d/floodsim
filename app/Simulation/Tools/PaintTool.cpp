@@ -29,27 +29,24 @@ void PaintTool::setBrushSize(const int size) {
     brushSize = std::max(1, std::min(10, size));
 }
 
-void PaintTool::applyTool(Grid* grid, const int centerX, const int centerY) const {
+void PaintTool::applyTool(Grid* grid, const int centerX, const int centerY, const bool isAlternateMode) const {
     if (grid == nullptr || currentTool == ToolType:: Camera) {
         return;
     }
 
-    // Apply tool to all cells within brush radius
     for (int dy = -brushSize + 1; dy < brushSize; ++dy) {
         for (int dx = -brushSize + 1; dx < brushSize; ++dx) {
             const int targetX = centerX + dx;
             const int targetY = centerY + dy;
 
-            // Check if within circular brush area
             const auto distSquared = static_cast<float>(dx * dx + dy * dy);
             const auto radiusSquared = static_cast<float>(brushSize * brushSize);
 
             if (distSquared < radiusSquared) {
                 Cell* cell = grid->getCell(targetX, targetY);
                 if (cell != nullptr) {
-                    applySingleCell(cell);
+                    applySingleCell(cell, isAlternateMode);
 
-                    //Capture states
                     const float prevTerrain = cell->getTerrainHeight();
                     const float prevWater = cell->getWaterDepth();
                     const auto prevType = cell->getType();
@@ -71,69 +68,131 @@ void PaintTool::applyTool(Grid* grid, const int centerX, const int centerY) cons
         }
     }
 
-    // Update the texture after painting
     grid->updateHeightTexture();
 }
 
-void PaintTool::applySingleCell(Cell* cell) const {
+void PaintTool::applySingleCell(Cell* cell, bool isAlternateMode) const {
     if (cell == nullptr || currentGrid == nullptr) {
         return;
     }
 
     switch (currentTool) {
         case ToolType::Terrain:
-            // POPRAWIONE - Teren nadpisuje wszystko
-            cell->setType(LAND);
-            cell->setTerrainHeight(std::min(cell->getTerrainHeight() + 0.5F, CAMERA_MAX_HEIGHT));
-            // Usuń wodę gdy budujesz teren
-            cell->setWaterDepth(0.0F);
-            cell->setSourceStrength(0.0F);
-            cell->setRainIntensity(0.0F);
+            if (isAlternateMode) {
+                // right-click: lower terrain
+                cell->setTerrainHeight(std::max(cell->getTerrainHeight() - 0.5F, -1.0F * currentGrid->getMaxDepth()));
+            } else {
+                // left-click: raise terrain (original behavior)
+                cell->setType(LAND);
+                cell->setTerrainHeight(std::min(cell->getTerrainHeight() + 0.5F, CAMERA_MAX_HEIGHT));
+                cell->setWaterDepth(0.0F);
+                cell->setSourceStrength(0.0F);
+                cell->setRainIntensity(0.0F);
+            }
             break;
 
-        case ToolType:: Obstacle:
-            if (cell->getType() != OBSTACLE) {
-                cell->setType(OBSTACLE);
+        case ToolType::Obstacle:
+            if (isAlternateMode) {
+                // right-click: remove obstacle (convert to land)
+                if (cell->getType() == OBSTACLE) {
+                    cell->setType(LAND);
+                }
+            } else {
+                // left-click: create obstacle (original behavior)
+                if (cell->getType() != OBSTACLE) {
+                    cell->setType(OBSTACLE);
+                }
             }
             break;
 
         case ToolType::River:
         {
-            // POPRAWIONE - Rzeka tworzy wgłębienie z wodą
-            cell->setType(RIVER);
+            if (isAlternateMode) {
+                // right-click: raise terrain and remove water
+                const float newHeight = cell->getTerrainHeight() + 0.5F;
+                if (newHeight <= CAMERA_MAX_HEIGHT) {
+                    cell->setTerrainHeight(newHeight);
+                }
+                // reduce water
+                cell->setWaterDepth(std::max(0.0F, cell->getWaterDepth() - 0.5F));
+                // if no water left, convert to land
+                if (cell->getWaterDepth() < 0.01F && cell->getType() == RIVER) {
+                    cell->setType(LAND);
+                }
+            } else {
+                // left-click: create river (original behavior)
+                cell->setType(RIVER);
 
-            // Zawsze obniżaj teren tworząc wgłębienie
-            const float newHeight = cell->getTerrainHeight() - 0.5F;
-            if (newHeight >= -1.0F * currentGrid->getMaxDepth()) {
-                cell->setTerrainHeight(newHeight);
-            }
+                const float newHeight = cell->getTerrainHeight() - 0.5F;
+                if (newHeight >= -1.0F * currentGrid->getMaxDepth()) {
+                    cell->setTerrainHeight(newHeight);
+                }
 
-            // Dodaj wodę do rzeki
-            if (cell->getWaterDepth() < cell->getRiverCapacity()) {
-                cell->setWaterDepth(std::min(cell->getWaterDepth() + 0.5F, cell->getRiverCapacity()));
+                if (cell->getWaterDepth() < cell->getRiverCapacity()) {
+                    cell->setWaterDepth(std::min(cell->getWaterDepth() + 0.5F, cell->getRiverCapacity()));
+                }
             }
             break;
         }
 
         case ToolType::WaterSource:
-            if (cell->getType() != WATER_SOURCE) {
-                cell->setType(WATER_SOURCE);
+            if (isAlternateMode) {
+                // right-click: raise terrain and decrease water
+                const float newHeight = cell->getTerrainHeight() + 0.25F;
+                if (newHeight <= CAMERA_MAX_HEIGHT) {
+                    cell->setTerrainHeight(newHeight);
+                }
+
+                // decrease source strength
+                float newStrength = cell->getSourceStrength() - 0.2F;
+                if (newStrength <= 0.0F) {
+                    // remove source entirely
+                    cell->setSourceStrength(0.0F);
+                    cell->setWaterDepth(0.0F);
+                    if (cell->getType() == WATER_SOURCE) {
+                        cell->setType(LAND);
+                    }
+                } else {
+                    cell->setSourceStrength(newStrength);
+                    cell->setWaterDepth(newStrength);
+                }
+            } else {
+                // left-click: create depression and fill with water (like a spring/lake)
+                if (cell->getType() != WATER_SOURCE) {
+                    cell->setType(WATER_SOURCE);
+                    // lower terrain to create depression
+                    const float newHeight = cell->getTerrainHeight() - 0.25F;
+                    if (newHeight >= -1.0F * currentGrid->getMaxDepth()) {
+                        cell->setTerrainHeight(newHeight);
+                    }
+                    // start with moderate strength
+                    cell->setSourceStrength(0.5F);
+                    cell->setWaterDepth(0.5F);
+                } else {
+                    // deepen existing source and increase strength (capped at 3.0)
+                    const float newHeight = cell->getTerrainHeight() - 0.25F;
+                    if (newHeight >= -1.0F * currentGrid->getMaxDepth()) {
+                        cell->setTerrainHeight(newHeight);
+                    }
+
+                    float newStrength = std::min(cell->getSourceStrength() + 0.2F, 3.0F);
+                    cell->setSourceStrength(newStrength);
+                    cell->setWaterDepth(newStrength);
+                }
             }
-            cell->setSourceStrength(cell->getSourceStrength() + 0.2F);
-            cell->setWaterDepth(std::max(cell->getWaterDepth(), cell->getSourceStrength()));
             break;
 
         case ToolType::Eraser:
+            // eraser works the same for both clicks
             *cell = Cell();
             break;
 
         case ToolType::Camera:
-            // Do nothing
             break;
     }
 }
 
-void PaintTool::startContinuousPainting(Grid* grid, int gridX, int gridY) {
+void PaintTool::startContinuousPainting(Grid* grid, const int gridX, const int gridY, const bool isAlternateMode) {
     if (grid == nullptr || currentTool == ToolType::Camera) {
         return;
     }
@@ -142,13 +201,15 @@ void PaintTool::startContinuousPainting(Grid* grid, int gridX, int gridY) {
     currentPaintGridX = gridX;
     currentPaintGridY = gridY;
     isContinuousPainting = true;
+    isAlternateModeActive = isAlternateMode;
 
-    LOG(QString("Paint: START tool=%1 at (%2,%3) brush=%4")
+    LOG(QString("Paint: START tool=%1 at (%2,%3) brush=%4 alternate=%5")
         .arg(static_cast<int>(currentTool))
         .arg(gridX).arg(gridY)
-        .arg(brushSize));
+        .arg(brushSize)
+        .arg(isAlternateMode ? "true" : "false"));
 
-    applyTool(grid, gridX, gridY);
+    applyTool(grid, gridX, gridY, isAlternateMode);
     emit paintApplied();
 
     paintTimer->start();
@@ -158,9 +219,8 @@ void PaintTool::updatePaintPosition(int gridX, int gridY) {
     currentPaintGridX = gridX;
     currentPaintGridY = gridY;
 
-    // Apply immediately when position updates
     if (isContinuousPainting && currentGrid != nullptr) {
-        applyTool(currentGrid, gridX, gridY);
+        applyTool(currentGrid, gridX, gridY, isAlternateModeActive);
         emit paintApplied();
     }
 }
@@ -179,7 +239,7 @@ void PaintTool::applyPaintAtCurrentPosition() {
     }
 
     if (currentGrid->isValidPosition(currentPaintGridX, currentPaintGridY)) {
-        applyTool(currentGrid, currentPaintGridX, currentPaintGridY);
+        applyTool(currentGrid, currentPaintGridX, currentPaintGridY, isAlternateModeActive);
         emit paintApplied();
     }
 }

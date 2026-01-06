@@ -214,17 +214,27 @@ void OpenGLRenderer::mousePressEvent(QMouseEvent* event) {
             int gridX;
             int gridY;
             if (screenToGridCoords(event->pos().x(), event->pos().y(), gridX, gridY)) {
-                // If paint tool is active, start continuous painting
                 if (paintTool != nullptr && paintTool->getToolType() != ToolType::Camera) {
-                    paintTool->startContinuousPainting(grid, gridX, gridY);
+                    paintTool->startContinuousPainting(grid, gridX, gridY, false);
                 }
                 emit cellClicked(gridX, gridY);
             }
         }
-        // W trybie Orbit LPM służy do obrotu - obsłużone w mouseMoveEvent
     }
 
-    // PPM w obu trybach - obsłużone w mouseMoveEvent
+    if (event->button() == Qt::RightButton) {
+        if (cameraMode == CameraMode::TopDown && !cameraPanEnabled) {
+            // right-click for alternate mode painting (only if not in camera pan mode)
+            int gridX;
+            int gridY;
+            if (screenToGridCoords(event->pos().x(), event->pos().y(), gridX, gridY)) {
+                if (paintTool != nullptr && paintTool->getToolType() != ToolType::Camera) {
+                    paintTool->startContinuousPainting(grid, gridX, gridY, true);
+                }
+            }
+        }
+    }
+
     QOpenGLWidget::mousePressEvent(event);
 }
 
@@ -255,11 +265,19 @@ void OpenGLRenderer::mouseMoveEvent(QMouseEvent* event) {
     // Handle dragging with RIGHT button (PPM)
     if (isDragging && (event->buttons() & Qt::RightButton) != 0U) {
         if (cameraMode == CameraMode::Orbit) {
-            // W trybie Orbit: PPM = PRZESUWANIE (jak inspekcja broni w CS)
             panCamera(delta.x(), delta.y());
-        } else {
-            // In TopDown mode, right button pans
-            panCamera(static_cast<float>(delta.x()), static_cast<float>(delta.y()));
+        } else { // TopDown
+            if (cameraPanEnabled) {
+                // Camera panning mode
+                panCamera(static_cast<float>(delta.x()), static_cast<float>(delta.y()));
+            } else if (paintTool != nullptr && paintTool->getToolType() != ToolType::Camera) {
+                // Alternate mode painting with right-click
+                int gridX;
+                int gridY;
+                if (screenToGridCoords(event->pos().x(), event->pos().y(), gridX, gridY)) {
+                    paintTool->updatePaintPosition(gridX, gridY);
+                }
+            }
         }
         lastMousePos = event->pos();
     }
@@ -288,7 +306,7 @@ void OpenGLRenderer::mouseMoveEvent(QMouseEvent* event) {
 void OpenGLRenderer::mouseReleaseEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton || event->button() == Qt::RightButton) {
         isDragging = false;
-        if (event->button() == Qt::LeftButton && cameraMode == CameraMode:: TopDown && paintTool != nullptr) {
+        if (cameraMode == CameraMode::TopDown && paintTool != nullptr) {
             paintTool->stopContinuousPainting();
         }
     }
