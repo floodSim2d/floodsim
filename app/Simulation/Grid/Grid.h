@@ -22,7 +22,7 @@ class Grid {
     ~Grid();
 
     void initialize(QOpenGLFunctions* gl_context);
-    void cleanup();  // ← DODANE - czyści zasoby OpenGL
+    void cleanup();
     void render(const QMatrix4x4& projection, const QMatrix4x4& view) const;
 
     // getters setters
