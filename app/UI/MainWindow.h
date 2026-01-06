@@ -1,3 +1,6 @@
+#ifndef MAINWINDOW_H
+#define MAINWINDOW_H
+
 #include <QMainWindow>
 #include <memory>
 
@@ -6,24 +9,48 @@ class Grid;
 class FlowModel;
 class PaintTool;
 class OpenGLRenderer;
+class ToolPanel;
+class ParameterPanel;
+class SimulationToolbar;
+class FileMenuHandler;
 
+/**
+ * @brief main application window
+ *
+ * Simulation components:
+ * - Grid: simulation grid and heightmap
+ * - FlowModel: water flow simulation
+ * - PaintTool: terrain and water editing tools
+ * - OpenGLRenderer: 3D rendering
+ * UI components:
+ * - ToolPanel: Tool selection and brush controls
+ * - ParameterPanel: Simulation parameters
+ * - SimulationToolbar: Simulation controls and cell info
+ * - FileMenuHandler: File operations
+ */
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
-    MainWindow(QWidget *parent = nullptr);
-    ~MainWindow();
+    explicit MainWindow(QWidget *parent = nullptr);
+    ~MainWindow() override;
 
 private:
-    void connectFlowModelSignals();
     void setupMenuBar();
-    void setupToolBar();
-    void setupStatusBar();
-    QWidget* setupLeftPanel();
-    QWidget* setupRightPanel();
+    void setupComponents();
+    void connectSignals();
 
-    std::unique_ptr<Grid> grid; // Grid nie jest QObject — trzymać w unique_ptr
-    FlowModel* flowModel;       // zarządzanie przez Qt (parent = this)
-    PaintTool* paintTool;       // zarządzanie przez Qt (parent = this)
-    OpenGLRenderer* renderer;   // zarządzanie przez Qt (parent = this)
-    QLabel* heightLabel;
+
+    // core simulation components
+    std::unique_ptr<Grid> grid;
+    FlowModel* flowModel;
+    PaintTool* paintTool;
+    OpenGLRenderer* renderer;
+
+    // ui
+    ToolPanel* toolPanel;
+    ParameterPanel* parameterPanel;
+    SimulationToolbar* simulationToolbar;
+    FileMenuHandler* fileMenuHandler;
 };
+
+#endif // MAINWINDOW_H

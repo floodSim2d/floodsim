@@ -13,7 +13,6 @@ enum class ToolType : std::uint8_t {
     Obstacle,
     River,
     WaterSource,
-    // Rain removed - replaced by global weather control
     Eraser
 };
 
