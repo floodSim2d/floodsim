@@ -306,6 +306,14 @@ auto Grid::getCell(int x, int y) -> Cell*{
     return &heightMap[y * width + x];
 }
 
+auto Grid::getCell(int x, int y) const -> const Cell* {
+    if (!isValidPosition(x, y)) {
+        return nullptr;
+    }
+
+    return &heightMap[y * width + x];
+}
+
 void Grid::setCell(const int x, const int y, const Cell& value) {
     if (!isValidPosition(x, y)) {
         return;

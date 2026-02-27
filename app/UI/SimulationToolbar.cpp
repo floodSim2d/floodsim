@@ -1,6 +1,7 @@
 #include "SimulationToolbar.h"
 
 #include <QAction>
+#include <QInputDialog>
 #include <QLabel>
 
 #include "../Simulation/Grid/Grid.h"
@@ -21,9 +22,9 @@ SimulationToolbar::SimulationToolbar(Grid* grid, FlowModel* flowModel, OpenGLRen
 }
 
 void SimulationToolbar::setupActions() {
-    QAction* playAction = addAction("▶ Start");
+    QAction* playAction  = addAction("▶ Start");
     QAction* pauseAction = addAction("⏸ Stop");
-    QAction* stepAction = addAction("⏭ Krok");
+    QAction* stepAction  = addAction("⏭ Krok");
     addSeparator();
     QAction* resetAction = addAction("Reset");
 
@@ -92,4 +93,3 @@ void SimulationToolbar::updateCellInfo(int gridX, int gridY, const Cell& cell) {
 
     cellInfoLabel->setText(QString("Pozycja: (%1, %2) | %3").arg(gridX).arg(gridY).arg(label));
 }
-

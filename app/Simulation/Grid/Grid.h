@@ -27,6 +27,7 @@ class Grid {
 
     // getters setters
     Cell* getCell(int x, int y);
+    const Cell* getCell(int x, int y) const;
     void setCell(int x, int y, const Cell& value);
 
     auto getWidth() const { return width; }

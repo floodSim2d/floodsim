@@ -1,4 +1,3 @@
-
 #include "MainWindow.h"
 
 #include <QAction>
@@ -8,11 +7,13 @@
 #include <QHBoxLayout>
 #include <QDebug>
 #include <QWidget>
+#include <QInputDialog>
 
 #include "../Utils/Logger.h"
 #include "../Simulation/Grid/Grid.h"
 #include "../Simulation/FlowModel/FlowModel.h"
 #include "../Simulation/Tools/PaintTool.h"
+#include "../Simulation/Tools/TerrainGenerator.h"
 #include "../Renderer/OpenGLRenderer.h"
 #include "ToolPanel.h"
 #include "ParameterPanel.h"
@@ -30,6 +31,7 @@ MainWindow::MainWindow(QWidget *parent)
       simulationToolbar(nullptr),
       fileMenuHandler(nullptr)
 {
+    // Pusta plansza na starcie – użytkownik sam decyduje czy generować teren czy rysować
     paintTool = new PaintTool(this);
     renderer = new OpenGLRenderer(grid.get(), this);
     flowModel = new FlowModel(grid.get(), this);
@@ -99,6 +101,23 @@ void MainWindow::setupComponents() {
     toolPanel->setMinimumWidth(150);
     parameterPanel->setMinimumWidth(200);
 
+    // Przycisk "Generuj teren" po prawej stronie toolbara symulacji
+    simulationToolbar->addSeparator();
+    QAction* genAction = simulationToolbar->addAction("🗺 Generuj teren");
+    connect(genAction, &QAction::triggered, this, [this]() {
+        bool ok = false;
+        const int seed = QInputDialog::getInt(
+            this,
+            "Generator terenu",
+            "Seed (liczba całkowita):",
+            42, 0, INT_MAX, 1,
+            &ok
+        );
+        if (ok) {
+            onGenerateTerrainRequested(static_cast<uint32_t>(seed));
+        }
+    });
+
     addToolBar(simulationToolbar);
 
     auto* central = new QWidget(this);
@@ -106,10 +125,10 @@ void MainWindow::setupComponents() {
 
     auto* mainLayout = new QHBoxLayout(central);
     mainLayout->addWidget(toolPanel);
-    mainLayout->addWidget(renderer, 1);  // Stretch factor 1
+    mainLayout->addWidget(renderer, 1);
     mainLayout->addWidget(parameterPanel);
 
-    statusBar()->showMessage("Gotowe");
+    statusBar()->showMessage("Gotowe — narysuj teren lub kliknij 'Generuj teren'");
 }
 
 void MainWindow::connectSignals() {
@@ -149,6 +168,19 @@ void MainWindow::connectSignals() {
         statusBar()->showMessage(message);
     });
 
+    connect(simulationToolbar, &SimulationToolbar::generateTerrainRequested, this, [this](uint32_t seed) {
+        flowModel->stop();
+        TerrainGenerator gen(seed);
+        gen.generateTerrain(*grid);
+        gen.printAsciiMap(*grid);
+        renderer->makeCurrent();
+        grid->updateHeightTexture(); // wypełnij pierwszy PBO
+        grid->updateHeightTexture(); // wypełnij drugi PBO (double-buffering)
+        renderer->doneCurrent();
+        renderer->update();
+        statusBar()->showMessage(QString("Teren wygenerowany (seed: %1)").arg(seed));
+    });
+
     // FileMenuHandler signals
     connect(fileMenuHandler, &FileMenuHandler::statusMessageRequested, this, [this](const QString& message) {
         statusBar()->showMessage(message);
@@ -165,3 +197,16 @@ void MainWindow::connectSignals() {
     });
 }
 
+void MainWindow::onGenerateTerrainRequested(uint32_t seed) {
+    flowModel->stop();
+    grid->clearHeightmap();
+    TerrainGenerator gen(seed);
+    gen.generateTerrain(*grid);
+    gen.printAsciiMap(*grid);
+    renderer->makeCurrent();
+    grid->updateHeightTexture(); // wypełnij pierwszy PBO
+    grid->updateHeightTexture(); // wypełnij drugi PBO (double-buffering)
+    renderer->doneCurrent();
+    renderer->update();
+    statusBar()->showMessage(QString("Teren wygenerowany (seed: %1)").arg(seed));
+}

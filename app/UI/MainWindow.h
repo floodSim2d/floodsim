@@ -34,6 +34,9 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow() override;
 
+private slots:
+    void onGenerateTerrainRequested(uint32_t seed);
+
 private:
     void setupMenuBar();
     void setupComponents();

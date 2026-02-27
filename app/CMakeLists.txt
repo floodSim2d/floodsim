@@ -18,6 +18,8 @@ add_executable(floodsim
         Simulation/Grid/Cell.h
         Simulation/Tools/PaintTool.h
         Simulation/Tools/PaintTool.cpp
+        Simulation/Tools/TerrainGenerator.h
+        Simulation/Tools/TerrainGenerator.cpp
         Simulation/FlowModel/FlowModel.h
         Simulation/FlowModel/FlowModel.cpp
         Utils/Logger.h

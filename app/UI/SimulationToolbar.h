@@ -2,6 +2,7 @@
 #define FLOODSIM_SIMULATIONTOOLBAR_H
 
 #include <QToolBar>
+#include <cstdint>
 
 class Grid;
 class FlowModel;
@@ -29,6 +30,7 @@ signals:
      * @brief display a status message in status bar
      */
     void statusMessageRequested(const QString& message);
+    void generateTerrainRequested(uint32_t seed);
 
 private:
     void setupActions();
@@ -43,4 +45,3 @@ private:
 };
 
 #endif // FLOODSIM_SIMULATIONTOOLBAR_H
-
