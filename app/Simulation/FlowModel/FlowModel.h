@@ -36,6 +36,10 @@ class FlowModel : public QObject {
     void setGlobalRainIntensity(float intensity);
     float getGlobalRainIntensity() const { return globalRainIntensity; }
 
+    // Infiltration Control
+    void setInfiltrationRate(float rate) { infiltrationRate = rate; }
+    float getInfiltrationRate() const { return infiltrationRate; }
+
    signals:
     void simulationStarted();
     void simulationPaused();
@@ -50,6 +54,7 @@ class FlowModel : public QObject {
     float calculateOutflow(int x, int y, int nx, int ny) const;
     void applyWaterSources();
     void applyRainfall();
+    void applyInfiltration();
     void updateVelocities() const;
     void updateCellVelocity(int x, int y, float cellSize) const;
     float calculateGradientX(int x, int y, float cellSize) const;
@@ -68,6 +73,9 @@ class FlowModel : public QObject {
     // Global rain state
     bool globalRainEnabled;
     float globalRainIntensity; // Water depth added per second
+
+    // Infiltration state
+    float infiltrationRate;    // Water depth absorbed by ground per second (non-river cells only)
 
     // flow data for current step
     struct FlowData {

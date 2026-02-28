@@ -19,7 +19,9 @@ ParameterPanel::ParameterPanel(Grid* grid, FlowModel* flowModel, OpenGLRenderer*
       renderer(renderer),
       flowCoefficientSpinBox(nullptr),
       maxDepthSlider(nullptr),
-      depthValueLabel(nullptr)
+      depthValueLabel(nullptr),
+      infiltrationSlider(nullptr),
+      infiltrationValueLabel(nullptr)
 {
     setAutoFillBackground(true);
     setupUI();
@@ -80,6 +82,29 @@ void ParameterPanel::setupUI() {
     weatherLayout->addWidget(rainValueLabel);
 
     panelLayout->addWidget(weatherGrp);
+
+    // --- Osobna grupa: Gleba ---
+    auto* soilGrp = new QGroupBox("Gleba", this);
+    auto* soilLayout = new QVBoxLayout(soilGrp);
+
+    auto* infiltrationInfo = new QLabel("Wsiąkanie wody w ziemię (nie dotyczy rzek ani źródeł wody). Suwak określa ubytek wody w m/s.", soilGrp);
+    infiltrationInfo->setWordWrap(true);
+    infiltrationInfo->setStyleSheet("QLabel { color: #666; font-size: 11px; margin-bottom: 5px; }");
+    soilLayout->addWidget(infiltrationInfo);
+
+    soilLayout->addWidget(new QLabel("Współczynnik wsiąkania:", soilGrp));
+
+    infiltrationSlider = new QSlider(Qt::Horizontal, soilGrp);
+    infiltrationSlider->setMinimum(0);
+    infiltrationSlider->setMaximum(100);
+    infiltrationSlider->setValue(0);
+    soilLayout->addWidget(infiltrationSlider);
+
+    infiltrationValueLabel = new QLabel("0.000", soilGrp);
+    infiltrationValueLabel->setAlignment(Qt::AlignCenter);
+    soilLayout->addWidget(infiltrationValueLabel);
+
+    panelLayout->addWidget(soilGrp);
     panelLayout->addStretch();
 
     connect(maxDepthSlider, &QSlider::valueChanged, this, [this](int value) {
@@ -99,6 +124,12 @@ void ParameterPanel::setupUI() {
         flowModel->setGlobalRainIntensity(intensity);
         rainValueLabel->setText(QString::number(intensity, 'f', 3));
     });
+
+    connect(infiltrationSlider, &QSlider::valueChanged, this, [this](int value) {
+        float rate = static_cast<float>(value) / 200.0f;
+        flowModel->setInfiltrationRate(rate);
+        infiltrationValueLabel->setText(QString::number(rate, 'f', 3));
+    });
 }
 
 void ParameterPanel::applyParameters() {
@@ -115,4 +146,3 @@ void ParameterPanel::applyParameters() {
 
     emit parametersApplied(message);
 }
-
