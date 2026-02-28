@@ -43,7 +43,8 @@ private:
     QDoubleSpinBox* flowCoefficientSpinBox;
     QSlider* maxDepthSlider;
     QLabel* depthValueLabel;
+    QSlider* infiltrationSlider;
+    QLabel* infiltrationValueLabel;
 };
 
 #endif // FLOODSIM_PARAMETERPANEL_H
-

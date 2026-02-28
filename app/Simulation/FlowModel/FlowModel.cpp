@@ -14,7 +14,8 @@ FlowModel::FlowModel(Grid* grid, QObject* parent)
       dampingFactor(0.999f),   // 0.1% energy loss per step so water doesn't oscillate indefinitely
       updateInterval(16),      // ~60 FPS
       globalRainEnabled(false),
-      globalRainIntensity(0.0f) {
+      globalRainIntensity(0.0f),
+      infiltrationRate(0.0f) {
 
     connect(timer, &QTimer::timeout, this, &FlowModel::update);
 
@@ -134,6 +135,8 @@ void FlowModel::computeFlowStep() {
 
     applyRainfall();
 
+    applyInfiltration();
+
     // apply flows to cells and update water depths
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
@@ -242,6 +245,43 @@ void FlowModel::applyRainfall() {
                 const int idx = y * width + x;
                 flowBuffer[idx].netFlow += flowToAdd;
             }
+        }
+    }
+}
+
+/*
+ * Applies infiltration - water is absorbed by the ground on non-river, non-obstacle cells.
+ * Only applies to LAND/EMPTY/RAIN cells (anything that is not a RIVER or WATER_SOURCE).
+ */
+void FlowModel::applyInfiltration() {
+    if (infiltrationRate <= 0.0001f) {
+        return;
+    }
+
+    const auto width = grid->getWidth();
+    const auto height = grid->getHeight();
+    const float cellArea = grid->getCellSize() * grid->getCellSize();
+
+    // Amount of water depth absorbed per step
+    const float absorb = infiltrationRate * dt;
+    const float flowToRemove = absorb * cellArea;
+
+    for (int y = 0; y < static_cast<int>(height); ++y) {
+        for (int x = 0; x < static_cast<int>(width); ++x) {
+            const Cell* cell = grid->getCell(x, y);
+            if (cell == nullptr) {
+                continue;
+            }
+            // Only absorb on non-river, non-water-source, non-obstacle cells
+            const CellType type = cell->getType();
+            if (type == RIVER || type == WATER_SOURCE || type == OBSTACLE) {
+                continue;
+            }
+            if (cell->getWaterDepth() <= 0.0f) {
+                continue;
+            }
+            const int idx = y * width + x;
+            flowBuffer[idx].netFlow -= flowToRemove;
         }
     }
 }
