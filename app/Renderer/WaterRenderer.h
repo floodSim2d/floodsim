@@ -6,8 +6,6 @@
 #include <QOpenGLShaderProgram>
 #include <QOpenGLTexture>
 #include <QOpenGLVertexArrayObject>
-#include <QMatrix4x4>
-#include <QVector2D>
 
 class Grid;
 
@@ -36,7 +34,7 @@ public:
      * and depth-write disabled (glDepthMask(GL_FALSE)).
      */
     void render(const QMatrix4x4& projection, const QMatrix4x4& view,
-                QOpenGLTexture* heightMapTexture) const;
+                QOpenGLTexture* heightMapTexture, const QVector3D& viewPos) const;
 
 private:
     void createShaders();

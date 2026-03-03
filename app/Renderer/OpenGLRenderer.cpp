@@ -73,10 +73,10 @@ void OpenGLRenderer::paintGL() {
     // uncomment for testing wireframe mode
     // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-    if (grid && waterRenderer) {
-        grid->render(projectionMatrix, viewMatrix);
+    if (grid != nullptr && waterRenderer != nullptr) {
+        grid->render(projectionMatrix, viewMatrix, cameraPosition);
 
-        waterRenderer->render(projectionMatrix, viewMatrix, grid->getHeightTexture());
+        waterRenderer->render(projectionMatrix, viewMatrix, grid->getHeightTexture(), cameraPosition);
     }
 }
 

@@ -108,7 +108,7 @@ void WaterRenderer::createMesh() {
 }
 
 void WaterRenderer::render(const QMatrix4x4& projection, const QMatrix4x4& view,
-                            QOpenGLTexture* heightMapTexture) const {
+                            QOpenGLTexture* heightMapTexture, const QVector3D& viewPos) const {
     if (shaderProgram == nullptr || heightMapTexture == nullptr) {
         return;
     }
@@ -126,7 +126,10 @@ void WaterRenderer::render(const QMatrix4x4& projection, const QMatrix4x4& view,
                   static_cast<float>(grid->getHeight())));
     shaderProgram->setUniformValue("cellSize", grid->getCellSize());
 
-    // Render water with alpha blending on top of terrain
+    shaderProgram->setUniformValue("lightDirection", QVector3D(0.4F, 0.3F, 0.8F).normalized());
+    shaderProgram->setUniformValue("viewPos", viewPos);
+
+    // render water with alpha blending on top of terrain
     glContext->glDepthMask(GL_FALSE);
 
     VAO->bind();

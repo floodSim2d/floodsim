@@ -12,22 +12,43 @@ out vec2 fragTexCoord;
 out float terrainHeight;
 out float waterDepth;
 out float isObstacle;
+out vec3 fragWorldPos;
+out vec3 fragNormal;
 
 void main()
 {
     fragTexCoord = texCoord;
 
+    // Sample all three channels from the heightMap texture
     vec3 heightData = texture(heightMap, fragTexCoord).rgb;
-    isObstacle = heightData.r; // 1.0F - obstacle, 0.0F - free space
-    terrainHeight = heightData.g; // Green channel = terrain height
-    waterDepth = heightData.b; // Blue channel = water depth
+    isObstacle = heightData.r;
+    terrainHeight = heightData.g;
+    waterDepth = heightData.b;
 
-    // X and Y are horizontal plane, Z is height (for top-down view)
-    // Position is [0,1], scale by grid dimensions and cell size to get world space
+    // World-space position
     vec3 pos = vec3(
-                    position.x * gridSize.x * cellSize,
-                    position.y * gridSize.y * cellSize,
-                    terrainHeight
-                );
+        position.x * gridSize.x * cellSize,
+        position.y * gridSize.y * cellSize,
+        terrainHeight
+    );
+    fragWorldPos = pos;
+
+    vec2 texelSize = vec2(1.0) / gridSize;
+    float hL = texture(heightMap, fragTexCoord + vec2(-texelSize.x, 0.0)).g;
+    float hR = texture(heightMap, fragTexCoord + vec2( texelSize.x, 0.0)).g;
+    float hD = texture(heightMap, fragTexCoord + vec2(0.0, -texelSize.y)).g;
+    float hU = texture(heightMap, fragTexCoord + vec2(0.0,  texelSize.y)).g;
+
+    // dx and dy are the world-space distances between samples
+    float dx = cellSize * 2.0;
+    float dy = cellSize * 2.0;
+
+    // normal from height gradient: N = normalize(-dh/dx, -dh/dy, 1)
+    fragNormal = normalize(vec3(
+        (hL - hR) / dx,
+        (hD - hU) / dy,
+        1.0
+    ));
+
     gl_Position = projection * view * vec4(pos, 1.0);
 }

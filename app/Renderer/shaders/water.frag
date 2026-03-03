@@ -5,8 +5,13 @@ in float vTerrainHeight;
 in float vWaterDepth;
 in float vWaterSurfaceHeight;
 in vec2 vWorldPos;
+in vec3 vFragWorldPos;
+in vec3 vFragNormal;
 
 out vec4 fragColor;
+
+uniform vec3 lightDirection;
+uniform vec3 viewPos;
 
 
 float hash(vec2 p) {
@@ -96,32 +101,52 @@ void main()
 
     vec3 waterColor = getWaterColor(vWaterDepth);
 
-
+    // --- Voronoi cell pattern ---
     float cells1 = voronoi(vWorldPos * 0.4);
     float cells2 = voronoi(vWorldPos * 0.9 + vec2(17.3, 31.7));
-    // darken cell interiors, brighten edges - subtle grid-like pattern
     float cellPattern = cells1 * 0.6 + cells2 * 0.4;
     waterColor += vec3(cellPattern * 0.06 - 0.03);
 
+    // --- Scattered bright specks ---
     float specks1 = particle(vWorldPos, 0.8, 0.08);
     float specks2 = particle(vWorldPos + vec2(43.7, 91.2), 1.5, 0.06);
     float specks3 = particle(vWorldPos + vec2(71.1, 23.4), 3.0, 0.04);
 
     float allSpecks = specks1 * 0.5 + specks2 * 0.35 + specks3 * 0.2;
-    // specks are brighter highlights on the water surface
     vec3 speckColor = vec3(0.6, 0.8, 0.95);
     waterColor = mix(waterColor, speckColor, allSpecks * 0.4);
 
     float colorVar = noise(vWorldPos * 0.03) * 0.08 - 0.04;
     waterColor += vec3(colorVar * 0.5, colorVar, colorVar * 0.8);
 
+    // foam at edges
     float edgeFactor = clamp(1.0 - vWaterDepth / 0.8, 0.0, 1.0);
     float foamNoise = noise(vWorldPos * 2.0);
     float foamMask = edgeFactor * smoothstep(0.3, 0.6, foamNoise);
     vec3 foamColor = vec3(0.75, 0.88, 0.95);
     waterColor = mix(waterColor, foamColor, foamMask * 0.45);
 
+    // blinn-phong lighting
+    vec3 normal = normalize(vFragNormal);
+    vec3 lightDir = normalize(lightDirection);
+    vec3 viewDir = normalize(viewPos - vFragWorldPos);
+
+    // ambient
+    float ambientStrength = 0.4;
+    vec3 ambient = ambientStrength * waterColor;
+
+    // diffuse
+    float diff = max(dot(normal, lightDir), 0.0);
+    vec3 diffuse = diff * waterColor;
+
+    // specular
+    vec3 halfwayDir = normalize(lightDir + viewDir);
+    float spec = pow(max(dot(normal, halfwayDir), 0.0), 64.0);
+    float specularStrength = 0.5;
+    vec3 specular = specularStrength * spec * vec3(1.0, 1.0, 0.95);
+
+    vec3 litColor = ambient + diffuse + specular;
     float alpha = getWaterOpacity(vWaterDepth);
 
-    fragColor = vec4(waterColor, alpha);
+    fragColor = vec4(litColor, alpha);
 }

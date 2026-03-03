@@ -13,6 +13,8 @@ out float vTerrainHeight;
 out float vWaterDepth;
 out float vWaterSurfaceHeight;
 out vec2 vWorldPos;
+out vec3 vFragWorldPos;
+out vec3 vFragNormal;
 
 void main()
 {
@@ -35,6 +37,9 @@ void main()
         : vTerrainHeight - 1.0;
 
     vec3 pos = vec3(worldPos2D.x, worldPos2D.y, zHeight);
+    vFragWorldPos = pos;
+
+    vFragNormal = vec3(0.0, 0.0, 1.0);
 
     gl_Position = projection * view * vec4(pos, 1.0);
 }

@@ -23,7 +23,7 @@ class Grid {
 
     void initialize(QOpenGLFunctions* gl_context);
     void cleanup();
-    void render(const QMatrix4x4& projection, const QMatrix4x4& view) const;
+    void render(const QMatrix4x4& projection, const QMatrix4x4& view, const QVector3D& viewPos) const;
 
     // getters setters
     Cell* getCell(int x, int y);
