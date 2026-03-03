@@ -45,6 +45,9 @@ class Grid {
     [[nodiscard]] bool isValidPosition(int x, int y) const;
     [[nodiscard]] QVector2D worldPosToGrid(const QVector2D& worldPos) const;
 
+    // OpenGL accessors (for WaterRenderer sharing)
+    [[nodiscard]] QOpenGLTexture* getHeightTexture() const { return heightTexture; }
+
    private:
     void createMesh();
     void createHeightTexture();

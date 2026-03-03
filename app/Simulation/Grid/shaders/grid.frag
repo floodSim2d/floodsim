@@ -17,13 +17,6 @@ float hash21(vec2 p) {
 // TERRAIN LEVEL FUNCTIONS
 // ============================================================================
 
-vec3 getWaterColor(vec2 texCoord, float depth, float totalHeight) {
-    vec3 shallowWater = vec3(0.2, 0.5, 0.7);
-    vec3 deepWater = vec3(0.0, 0.05, 0.3);
-    float t = clamp(-totalHeight / 30.0, 0.0, 1.0);
-    return mix(shallowWater, deepWater, t);
-}
-
 // Below sea level (height < 0.0)
 vec3 getBelowSeaLevelColor(vec2 texCoord, float height) {
     float depthFactor = clamp(-height / 20.0, 0.0, 1.0);
@@ -64,7 +57,7 @@ vec3 getSnowLevelColor(vec2 texCoord, float height) {
 }
 
 /*
-* main function
+* main function rendering terrain
 */
 void main() {
     vec3 terrainColor;
@@ -75,23 +68,14 @@ void main() {
     } else if (terrainHeight < 50.0) {
         terrainColor = getLowGrasslandColor(fragTexCoord, terrainHeight);
     } else if (terrainHeight < 100.0) {
-        terrainColor = getPaintedTerrainColor(fragTexCoord, terrainHeight); // Użycie nowego koloru
+        terrainColor = getPaintedTerrainColor(fragTexCoord, terrainHeight);
     } else if (terrainHeight < 150.0) {
         terrainColor = getHighGrasslandColor(fragTexCoord, terrainHeight);
     } else {
         terrainColor = getSnowLevelColor(fragTexCoord, terrainHeight);
     }
 
-    // water overlay
-    if (waterDepth > 0.001) {
-        float totalHeight = terrainHeight + waterDepth;
-        vec3 waterColor = getWaterColor(fragTexCoord, waterDepth, totalHeight);
-        // more sensitive opacity curve for shallow water visibility
-        // ysing sqrt to make shallow water more visible
-        float waterOpacity = clamp(sqrt(waterDepth) / 1.5, 0.1, 0.95);
-        terrainColor = mix(terrainColor, waterColor, waterOpacity);
-    }
-
+    // todo: refactor, add some noise-based buildings
     // Obstacle overlay
     if (isObstacle == 1.0) {
         terrainColor = vec3(0.4, 0.4, 0.4);

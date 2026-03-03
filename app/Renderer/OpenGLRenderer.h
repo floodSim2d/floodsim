@@ -8,6 +8,7 @@
 #include <QString>
 
 #include "../Simulation/Tools/PaintTool.h"
+#include "WaterRenderer.h"
 
 constexpr float CAMERA_ZOOM_MAX_ORTHO = 100.0F;
 constexpr float CAMERA_ZOOM_MIN_ORTHO = 10.0F;
@@ -27,11 +28,11 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
     Q_OBJECT
 
    public:
-    explicit OpenGLRenderer(Grid* grid, QWidget* parent = nullptr);
-    ~OpenGLRenderer() override = default;
+    explicit OpenGLRenderer(Grid* grid,WaterRenderer* water_renderer ,QWidget* parent = nullptr);
+    ~OpenGLRenderer() override;
 
-    // Grid access
     auto getGrid() const -> Grid* { return grid; }
+    auto getWaterRenderer() const -> WaterRenderer* { return waterRenderer; }
 
     // Camera control
     void setCameraMode(CameraMode mode);
@@ -68,8 +69,9 @@ class OpenGLRenderer : public QOpenGLWidget, protected QOpenGLFunctions {
     void moveCameraVertical(float delta);
     bool screenToGridCoords(int screenX, int screenY, int& gridX, int& gridY) const;
 
-    // Grid
     Grid* grid;
+
+    WaterRenderer* waterRenderer;
 
     // Camera/View matrices
     QMatrix4x4 projectionMatrix;

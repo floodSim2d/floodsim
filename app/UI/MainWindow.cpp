@@ -22,7 +22,7 @@
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
-      grid(std::make_unique<Grid>(200, 200, 1.0F, DEFAULT_WATER_DEPTH)),
+      grid(nullptr),
       flowModel(nullptr),
       paintTool(nullptr),
       renderer(nullptr),
@@ -31,9 +31,10 @@ MainWindow::MainWindow(QWidget *parent)
       simulationToolbar(nullptr),
       fileMenuHandler(nullptr)
 {
-    // Pusta plansza na starcie – użytkownik sam decyduje czy generować teren czy rysować
+    grid = std::make_unique<Grid>(200, 200, 1.0F, DEFAULT_WATER_DEPTH);
     paintTool = new PaintTool(this);
-    renderer = new OpenGLRenderer(grid.get(), this);
+    waterRenderer = std::make_unique<WaterRenderer>(grid.get());
+    renderer = new OpenGLRenderer(grid.get(), waterRenderer.get(), this);
     flowModel = new FlowModel(grid.get(), this);
 
     renderer->setPaintTool(paintTool);
@@ -57,6 +58,9 @@ MainWindow::~MainWindow() {
     if (grid && renderer) {
         LOG("Cleaning up OpenGL resources");
         renderer->makeCurrent();
+        if (renderer->getWaterRenderer()) {
+            renderer->getWaterRenderer()->cleanup();
+        }
         grid->cleanup();
         renderer->doneCurrent();
     }
