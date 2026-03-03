@@ -17,11 +17,11 @@ float hash21(vec2 p) {
 // TERRAIN LEVEL FUNCTIONS
 // ============================================================================
 
-// Below sea level (height < 0.0)
 vec3 getBelowSeaLevelColor(vec2 texCoord, float height) {
     float depthFactor = clamp(-height / 20.0, 0.0, 1.0);
-    float greenIntensity = mix(0.18, 0.40, depthFactor);
-    return vec3(0.05, greenIntensity, 0.05);
+    vec3 surface = vec3(0.08, 0.22, 0.06);
+    vec3 deep    = vec3(0.03, 0.08, 0.03);
+    return mix(surface, deep, depthFactor);
 }
 
 // Low grassland (0.0 - 50.0) - PRZYWRÓCONO ZIELONY
@@ -79,6 +79,11 @@ void main() {
     // Obstacle overlay
     if (isObstacle == 1.0) {
         terrainColor = vec3(0.4, 0.4, 0.4);
+    }
+
+    if (waterDepth > 0.01) {
+        float darkening = clamp(waterDepth * 0.15, 0.0, 0.7);
+        terrainColor *= (1.0 - darkening);
     }
 
     fragColor = vec4(terrainColor, 1.0);

@@ -26,15 +26,7 @@ OpenGLRenderer::OpenGLRenderer(Grid* grid,WaterRenderer* water_renderer ,QWidget
     setMouseTracking(true);
 }
 
-OpenGLRenderer::~OpenGLRenderer() {
-    makeCurrent();
-    if (waterRenderer) {
-        waterRenderer->cleanup();
-        delete waterRenderer;
-        waterRenderer = nullptr;
-    }
-    doneCurrent();
-}
+OpenGLRenderer::~OpenGLRenderer() = default;
 
 void OpenGLRenderer::initializeGL() {
     initializeOpenGLFunctions();

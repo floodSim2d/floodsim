@@ -58,12 +58,15 @@ MainWindow::~MainWindow() {
     if (grid && renderer) {
         LOG("Cleaning up OpenGL resources");
         renderer->makeCurrent();
-        if (renderer->getWaterRenderer()) {
-            renderer->getWaterRenderer()->cleanup();
+        if (waterRenderer) {
+            waterRenderer->cleanup();
         }
         grid->cleanup();
         renderer->doneCurrent();
     }
+
+    LOG("Releasing waterRenderer");
+    waterRenderer.reset();
 
     LOG("Releasing grid");
     grid.reset();
