@@ -3,9 +3,23 @@
 
 #include <QObject>
 #include <QTimer>
+#include <array>
 
 class Grid;
 
+/**
+ * @brief Pipe-model water flow simulation.
+ *
+ * Uses persistent pipe fluxes between neighboring cells (left/right/up/down).
+ * Each step:
+ *   1. Update pipe fluxes:  Q_new = max(0, Q_old + dt * A * g * Δh / L)
+ *   2. Scale down if total outflow > available water (mass conservation)
+ *   3. Update water depths from net flux
+ *   4. Derive velocity from flux differences
+ *
+ * "Fast Hydraulic Erosion Simulation and Visualization on GPU"
+ *            (Xing Mei, Philippe Decaudin, Bao-Gang Hu, 2007)
+ */
 class FlowModel : public QObject {
     Q_OBJECT
 
@@ -13,32 +27,28 @@ class FlowModel : public QObject {
     explicit FlowModel(Grid* grid, QObject* parent = nullptr);
     ~FlowModel() override = default;
 
-    // Control functions
+    // control functions
     void play();
     void pause();
     void stop();
     void step();
 
-    // getters setters
-    auto isPlaying() const -> bool { return playing; }
-    float getTimeStep() const { return dt; }
+    [[nodiscard]] auto isPlaying() const -> bool { return playing; }
+    [[nodiscard]] auto getTimeStep() const -> float { return dt; }
     void setTimeStep(float timeStep) { dt = timeStep; }
-    float getFlowCoefficient() const { return flowCoefficient; }
-    void setFlowCoefficient(float k) { flowCoefficient = k; }
-    float getDampingFactor() const { return dampingFactor; }
-    void setDampingFactor(float damping) { dampingFactor = damping; }
-    int getUpdateInterval() const { return updateInterval; }
+    [[nodiscard]] int getUpdateInterval() const { return updateInterval; }
     void setUpdateInterval(int interval);
 
-    // Global Rain Control
-    void setGlobalRainEnabled(bool enabled);
-    bool isGlobalRainEnabled() const { return globalRainEnabled; }
-    void setGlobalRainIntensity(float intensity);
-    float getGlobalRainIntensity() const { return globalRainIntensity; }
+    [[nodiscard]] float getPipeFriction() const { return pipeFriction; }
+    void setPipeFriction(float friction) { pipeFriction = std::max(0.0F, friction); }
 
-    // Infiltration Control
+    void setGlobalRainEnabled(bool enabled);
+    [[nodiscard]] bool isGlobalRainEnabled() const { return globalRainEnabled; }
+    void setGlobalRainIntensity(float intensity);
+    [[nodiscard]] float getGlobalRainIntensity() const { return globalRainIntensity; }
+
     void setInfiltrationRate(float rate) { infiltrationRate = rate; }
-    float getInfiltrationRate() const { return infiltrationRate; }
+    [[nodiscard]] float getInfiltrationRate() const { return infiltrationRate; }
 
    signals:
     void simulationStarted();
@@ -51,38 +61,51 @@ class FlowModel : public QObject {
 
    private:
     void computeFlowStep();
-    float calculateOutflow(int x, int y, int nx, int ny) const;
-    void applyWaterSources();
-    void applyRainfall();
-    void applyInfiltration();
+    void applyWaterSources() const;
+    void applyRainfall() const;
+    void applyInfiltration() const;
     void updateVelocities() const;
-    void updateCellVelocity(int x, int y, float cellSize) const;
-    float calculateGradientX(int x, int y, float cellSize) const;
-    float calculateGradientY(int x, int y, float cellSize) const;
 
     Grid* grid;
     QTimer* timer;
 
-    // simulation state
+    // Simulation state
     bool playing;
-    float dt;                  // time step
-    float flowCoefficient;     // k in Q = k * max(0, h_total_i - h_total_j)
-    float dampingFactor;       // energy loss during flow (0.0 - 1.0)
-    int updateInterval;        // timer interval in milliseconds
+    float dt;
+    int updateInterval;
 
-    // Global rain state
+    // Physics constants
+    static constexpr float GRAVITY = 9.81F;      // m/s²
+    float pipeFriction;                            // friction coefficient for exponential damping
+
     bool globalRainEnabled;
-    float globalRainIntensity; // Water depth added per second
+    float globalRainIntensity;
 
-    // Infiltration state
-    float infiltrationRate;    // Water depth absorbed by ground per second (non-river cells only)
+    float infiltrationRate;
+    static constexpr int DIR_LEFT  = 0;
+    static constexpr int DIR_RIGHT = 1;
+    static constexpr int DIR_UP    = 2;
+    static constexpr int DIR_DOWN  = 3;
+    static constexpr int NUM_DIRS  = 4;
+    static constexpr int DX[NUM_DIRS] = {-1,  1,  0,  0};
+    static constexpr int DY[NUM_DIRS] = { 0,  0, -1,  1};
 
-    // flow data for current step
-    struct FlowData {
-        float netFlow;         // net flow into cell
-        float totalOutflow;    // flowing out
+    static constexpr auto oppositeDir(const int dir) -> int {
+        // left<->right, up<->down
+        return dir ^ 1;
+    }
+
+    /**
+     * @brief Per-cell persistent pipe flux data.
+     *
+     * flux[d] = volume flow rate (m³/s) through pipe in direction d.
+     * Positive = flowing OUT of this cell in direction d.
+     */
+    struct PipeData {
+        std::array<float, NUM_DIRS> flux = {0.0F, 0.0F, 0.0F, 0.0F};
     };
-    std::vector<FlowData> flowBuffer;
+
+    std::vector<PipeData> pipeBuffer;
 };
 
 #endif  // FLOODSIM_FLOWMODEL_H

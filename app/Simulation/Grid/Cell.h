@@ -18,46 +18,45 @@ public:
     explicit Cell(float height = 0.0F, float water_depth = 0.0F, bool is_obstacle = false, bool is_river = false,
                   bool is_water_source = false, float river_capacity = 3.0F, float source_strength = 1.0F);
 
-    float getTerrainHeight() const { return terrainHeight; }
+    [[nodiscard]] auto getTerrainHeight() const -> float { return terrainHeight; }
     void setTerrainHeight(float height);
 
-    float getWaterDepth() const { return waterDepth; }
-    void setWaterDepth(float depth) { waterDepth = std::max(0.0f, depth); }
-    float getTotalHeight() const { return terrainHeight + waterDepth; }
+    [[nodiscard]] auto getWaterDepth() const -> float { return waterDepth; }
+    void setWaterDepth(const float depth) { waterDepth = std::max(0.0F, depth); }
+    [[nodiscard]] auto getTotalHeight() const -> float { return terrainHeight + waterDepth; }
 
-    QVector2D getVelocity() const { return velocity; }
+    [[nodiscard]] auto getVelocity() const -> QVector2D { return velocity; }
     void setVelocity(const QVector2D& vel) { velocity = vel; }
 
-    CellType getType() const;
+    [[nodiscard]] auto getType() const -> CellType;
     void setType(CellType type);
 
     // river channel capacity (max water depth before overflow)
     // riverCapacity is the LIMIT, waterDepth is the CURRENT amount
     // waterDepth > riverCapacity -> the river overflows
-    float getRiverCapacity() const { return riverCapacity; }
-    void setRiverCapacity(float capacity) { riverCapacity = std::max(0.0f, capacity); }
+    [[nodiscard]] auto getRiverCapacity() const -> float { return riverCapacity; }
+    void setRiverCapacity(float capacity) { riverCapacity = std::max(0.0F, capacity); }
 
     // water source properties
-    bool isWaterSource() const { return waterSource; }
-    float getSourceStrength() const { return sourceStrength; }
-    void setSourceStrength(float strength) { sourceStrength = std::max(0.0f, strength); }
+    [[nodiscard]] auto isWaterSource() const -> bool { return waterSource; }
+    [[nodiscard]] auto getSourceStrength() const -> float { return sourceStrength; }
+    void setSourceStrength(const float strength) { sourceStrength = std::max(0.0F, strength); }
 
     // Rain area properties
-    bool isRainArea() const { return rainArea; }
-    float getRainIntensity() const { return rainIntensity; }
-    void setRainIntensity(float intensity) { rainIntensity = std::max(0.0f, intensity); }
+    [[nodiscard]] auto isRainArea() const -> bool { return rainArea; }
+    [[nodiscard]] auto getRainIntensity() const -> float { return rainIntensity; }
+    void setRainIntensity(const float intensity) { rainIntensity = std::max(0.0F, intensity); }
 
-    bool canFlowThrough() const { return !obstacle; }
-    float getFlowCapacity() const;
-    void addWater(float amount) { waterDepth = std::max(0.0f, waterDepth + amount); }
-    void removeWater(float amount) { waterDepth = std::max(0.0f, waterDepth - amount); }
+    [[nodiscard]] auto canFlowThrough() const -> bool { return !obstacle; }
+    void addWater(const float amount) { waterDepth = std::max(0.0F, waterDepth + amount); }
+    void removeWater(const float amount) { waterDepth = std::max(0.0F, waterDepth - amount); }
 
     void reset();
     void resetWater();
 
     // stream operators for serialization
-    friend QDataStream& operator<<(QDataStream& stream, const Cell& cell);
-    friend QDataStream& operator>>(QDataStream& stream, Cell& cell);
+    friend auto operator<<(QDataStream& stream, const Cell& cell) -> QDataStream&;
+    friend auto operator>>(QDataStream& stream, Cell& cell) -> QDataStream&;
 
 private:
     float terrainHeight;

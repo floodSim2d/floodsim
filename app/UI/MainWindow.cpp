@@ -117,7 +117,7 @@ void MainWindow::setupComponents() {
             this,
             "Generator terenu",
             "Seed (liczba całkowita):",
-            42, 0, INT_MAX, 1,
+            0, 0, INT_MAX, 1,
             &ok
         );
         if (ok) {
