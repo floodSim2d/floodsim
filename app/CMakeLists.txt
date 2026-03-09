@@ -14,6 +14,8 @@ add_executable(floodsim
         Simulation/Grid/Grid.h
         Renderer/OpenGLRenderer.h
         Renderer/OpenGLRenderer.cpp
+        Renderer/WaterRenderer.h
+        Renderer/WaterRenderer.cpp
         Simulation/Grid/Cell.cpp
         Simulation/Grid/Cell.h
         Simulation/Tools/PaintTool.h
@@ -45,4 +47,6 @@ qt_add_resources(floodsim "shaders"
         FILES
             "Simulation/Grid/shaders/grid.vert"
             "Simulation/Grid/shaders/grid.frag"
+            "Renderer/shaders/water.vert"
+            "Renderer/shaders/water.frag"
 )

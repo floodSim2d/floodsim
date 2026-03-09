@@ -50,6 +50,7 @@ foreach(test_file ${QT_TEST_SOURCES})
         ${CMAKE_SOURCE_DIR}/app/Simulation/Grid/Cell.cpp
         ${CMAKE_SOURCE_DIR}/app/Simulation/FlowModel/FlowModel.cpp
         ${CMAKE_SOURCE_DIR}/app/Renderer/OpenGLRenderer.cpp
+        ${CMAKE_SOURCE_DIR}/app/Renderer/WaterRenderer.cpp
     )
 
     target_include_directories(${test_name} PRIVATE

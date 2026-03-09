@@ -23,7 +23,7 @@ class Grid {
 
     void initialize(QOpenGLFunctions* gl_context);
     void cleanup();
-    void render(const QMatrix4x4& projection, const QMatrix4x4& view) const;
+    void render(const QMatrix4x4& projection, const QMatrix4x4& view, const QVector3D& viewPos) const;
 
     // getters setters
     Cell* getCell(int x, int y);
@@ -44,6 +44,9 @@ class Grid {
     // utils
     [[nodiscard]] bool isValidPosition(int x, int y) const;
     [[nodiscard]] QVector2D worldPosToGrid(const QVector2D& worldPos) const;
+
+    // OpenGL accessors (for WaterRenderer sharing)
+    [[nodiscard]] QOpenGLTexture* getHeightTexture() const { return heightTexture; }
 
    private:
     void createMesh();

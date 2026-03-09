@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include <memory>
 
+class WaterRenderer;
 class QLabel;
 class Grid;
 class FlowModel;
@@ -45,6 +46,7 @@ private:
 
     // core simulation components
     std::unique_ptr<Grid> grid;
+    std::unique_ptr<WaterRenderer> waterRenderer;
     FlowModel* flowModel;
     PaintTool* paintTool;
     OpenGLRenderer* renderer;

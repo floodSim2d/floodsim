@@ -273,7 +273,7 @@ void Grid::updateHeightTexture(){
     currentPboIndex = nextPboIndex;
 }
 
-void Grid::render(const QMatrix4x4& projection, const QMatrix4x4& view) const {
+void Grid::render(const QMatrix4x4& projection, const QMatrix4x4& view, const QVector3D& viewPos) const {
     if (shaderProgram == nullptr) {
         LOG("Shader Program not created, cannot render grid.");
         return;
@@ -288,6 +288,9 @@ void Grid::render(const QMatrix4x4& projection, const QMatrix4x4& view) const {
     shaderProgram->setUniformValue("heightMap", 0);
     shaderProgram->setUniformValue("gridSize", QVector2D(width, height));
     shaderProgram->setUniformValue("cellSize", cellSize);
+
+    shaderProgram->setUniformValue("lightDirection", QVector3D(0.4F, 0.3F, 0.8F).normalized());
+    shaderProgram->setUniformValue("viewPos", viewPos);
 
     VAO->bind();
     glContext->glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, nullptr);

@@ -134,7 +134,7 @@ void ParameterPanel::setupUI() {
 
 void ParameterPanel::applyParameters() {
     const auto kValue = static_cast<float>(flowCoefficientSpinBox->value());
-    flowModel->setFlowCoefficient(kValue);
+    flowModel->setPipeFriction(kValue);
 
     const auto newDepth = static_cast<float>(maxDepthSlider->value());
     grid->setMaxDepth(newDepth);

@@ -24,11 +24,21 @@ void Cell::setTerrainHeight(float height) {
 
 
 auto Cell::getType() const -> CellType {
-    if (obstacle) return OBSTACLE;
-    if (rainArea) return RAIN;
-    if (waterSource) return WATER_SOURCE;
-    if (river && waterDepth > 0.01F) return RIVER;
-    if (terrainHeight > 0.01F) return LAND;
+    if (obstacle) {
+        return OBSTACLE;
+    }
+    if (rainArea) {
+        return RAIN;
+    }
+    if (waterSource) {
+        return WATER_SOURCE;
+    }
+    if (river && waterDepth > 0.01F) {
+        return RIVER;
+    }
+    if (terrainHeight > 0.01F) {
+        return LAND;
+    }
     return EMPTY;
 }
 
@@ -90,16 +100,6 @@ void Cell::setType(CellType type) {
             rainIntensity = 0.0F;
             break;
     }
-}
-
-float Cell::getFlowCapacity() const {
-    if (obstacle) return 0.0F;
-
-    if (river) {
-        return std::max(0.0F, riverCapacity - waterDepth);
-    }
-
-    return 1000.0F; // arbitrary large capacity for non-river cells, think of it like a ground that just absorbs water
 }
 
 // TODO: we need to keep track of the first values loaded to properly restore them

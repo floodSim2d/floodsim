@@ -1,27 +1,29 @@
 #include "FlowModel.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "../Grid/Grid.h"
+
+constexpr int FlowModel::DX[NUM_DIRS];
+constexpr int FlowModel::DY[NUM_DIRS];
 
 FlowModel::FlowModel(Grid* grid, QObject* parent)
     : QObject(parent),
       grid(grid),
       timer(new QTimer(this)),
       playing(false),
-      dt(0.016f),              // ~60 FPS default
-      flowCoefficient(0.5f),   // Moderate flow speed
-      dampingFactor(0.999f),   // 0.1% energy loss per step so water doesn't oscillate indefinitely
-      updateInterval(16),      // ~60 FPS
+      dt(0.016F),
+      updateInterval(16),
+      pipeFriction(0.5F),
       globalRainEnabled(false),
-      globalRainIntensity(0.0f),
-      infiltrationRate(0.0f) {
+      globalRainIntensity(0.0F),
+      infiltrationRate(0.0F) {
 
     connect(timer, &QTimer::timeout, this, &FlowModel::update);
 
-    // Initialize flow buffer
     if (grid != nullptr) {
-        flowBuffer.resize(grid->getWidth() * grid->getHeight());
+        pipeBuffer.resize(grid->getWidth() * grid->getHeight());
     }
 }
 
@@ -45,6 +47,11 @@ void FlowModel::stop() {
     if (playing || timer->isActive()) {
         playing = false;
         timer->stop();
+
+        for (auto& pipe : pipeBuffer) {
+            pipe.flux.fill(0.0F);
+        }
+
         emit simulationStopped();
     }
 }
@@ -79,278 +86,247 @@ void FlowModel::update() {
 }
 
 void FlowModel::computeFlowStep() {
-    const unsigned int width = grid->getWidth();
-    const unsigned int height = grid->getHeight();
-    const float cellArea = grid->getCellSize() * grid->getCellSize();
+    const auto g_width = grid->getWidth();
+    const auto g_height = grid->getHeight();
+    const float pipe_length = grid->getCellSize();
+    const float A = pipe_length;                                  // cross-section area
+    const float cellArea = pipe_length * pipe_length;
 
-    std::ranges::fill(flowBuffer, FlowData{.netFlow=0.0F, .totalOutflow=0.0F});
+    // Friction damping factor: exponential decay per step
+    // pipeFriction=0 → no damping, pipeFriction=1 → moderate, higher = more
+    const float dampFactor = std::exp(-pipeFriction * dt);
 
-    // calculate flows between all neighboring cells
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
+    for (auto y = 0; y < g_height; ++y) {
+        for (auto x = 0; x < g_width; ++x) {
+            const int idx = y * g_width + x;
             const Cell* cell = grid->getCell(x, y);
+
             if (cell == nullptr || !cell->canFlowThrough()) {
+                pipeBuffer[idx].flux.fill(0.0F);
                 continue;
             }
 
-            const int idx = y * width + x;
-            const float h_total_i = cell->getTotalHeight();
+            const float h_total = cell->getTotalHeight();
+            float totalOutflux = 0.0F;
 
-            // check all 4 neighbors (up, down, left, right)
-            const int dx[] = {0, 0, -1, 1};
-            const int dy[] = {-1, 1, 0, 0};
-
-            for (int dir = 0; dir < 4; ++dir) {
-                const int nx = x + dx[dir];
-                const int ny = y + dy[dir];
+            for (int d = 0; d < NUM_DIRS; ++d) {
+                const int nx = x + DX[d];
+                const int ny = y + DY[d];
 
                 if (!grid->isValidPosition(nx, ny)) {
+                    pipeBuffer[idx].flux[d] = 0.0F;
                     continue;
                 }
 
                 const Cell* neighbor = grid->getCell(nx, ny);
                 if (neighbor == nullptr || !neighbor->canFlowThrough()) {
+                    pipeBuffer[idx].flux[d] = 0.0F;
                     continue;
                 }
 
-                const float h_total_j = neighbor->getTotalHeight();
-                const float heightDiff = h_total_i - h_total_j;
+                const float h_total_n = neighbor->getTotalHeight();
+                const float deltaH = h_total - h_total_n;
 
-                if (heightDiff > 0.0f) {
-                    // water flows from current cell to neighbor
-                    float flow = calculateOutflow(x, y, nx, ny);
-                    flow = std::min(flow, cell->getWaterDepth()); // can't flow more than available water
+                // Pipe equation: Q = Q_old * damp + dt * A * g * Δh / L
+                float newFlux = dampFactor * pipeBuffer[idx].flux[d]
+                              + dt * A * GRAVITY * deltaH / pipe_length;
 
-                    const int nidx = ny * width + nx;
+                // Flux can't be negative (negative flow is
+                // handled by the neighbor's pipe in the opposite direction)
+                newFlux = std::max(0.0F, newFlux);
 
-                    flowBuffer[idx].netFlow -= flow;
-                    flowBuffer[idx].totalOutflow += flow;
-                    flowBuffer[nidx].netFlow += flow;
+                pipeBuffer[idx].flux[d] = newFlux;
+                totalOutflux += newFlux;
+            }
+
+            // mass conservation: scale down if outflow > available water
+            const float availableVolume = cell->getWaterDepth() * cellArea;
+            const float outVolume = totalOutflux * dt;
+
+            if (outVolume > availableVolume && outVolume > 1e-8F) {
+                const float scale = availableVolume / outVolume;
+                for (int d = 0; d < NUM_DIRS; ++d) {
+                    pipeBuffer[idx].flux[d] *= scale;
                 }
             }
         }
     }
 
     applyWaterSources();
-
     applyRainfall();
-
     applyInfiltration();
 
-    // apply flows to cells and update water depths
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
+    // For each cell:
+    //   ΔV = dt * (sum of inflow fluxes - sum of outflow fluxes) + source/rain deltas
+    //   Δh = ΔV / cellArea
+    // Inflow to cell (x,y) from direction d comes from neighbor's pipe in oppositeDir(d).
+
+    for (int y = 0; y < g_height; ++y) {
+        for (int x = 0; x < g_width; ++x) {
             Cell* cell = grid->getCell(x, y);
-            if (cell == nullptr) {
-                continue;
+            if (cell == nullptr) continue;
+
+            const int idx = y * g_width + x;
+
+            float totalInflux  = 0.0F;
+            float totalOutflux = 0.0F;
+
+            for (int d = 0; d < NUM_DIRS; ++d) {
+                // Outflow from this cell
+                totalOutflux += pipeBuffer[idx].flux[d];
+
+                // Inflow from neighbor in direction d
+                const int nx = x + DX[d];
+                const int ny = y + DY[d];
+                if (grid->isValidPosition(nx, ny)) {
+                    const int nidx = ny * g_width + nx;
+                    totalInflux += pipeBuffer[nidx].flux[oppositeDir(d)];
+                }
             }
 
-            const int idx = y * width + x;
-            const float flowChange = (flowBuffer[idx].netFlow * dt) / cellArea;
+            const float deltaVolume = dt * (totalInflux - totalOutflux);
+            const float deltaDepth = deltaVolume / cellArea;
 
-            float newWaterDepth = cell->getWaterDepth() + flowChange;
-
-            // apply damping based on outflow intensity to prevent oscillations
-            if (flowBuffer[idx].totalOutflow > 0.0F && newWaterDepth > 0.01F) {
-                // Apply damping as a tiny friction, scaled by flow intensity
-                const float flowIntensity = std::min(flowBuffer[idx].totalOutflow / cell->getWaterDepth(), 1.0F);
-                newWaterDepth *= 1.0F - (1.0F - dampingFactor) * flowIntensity;
-            }
-
-            // handle river overflow - excess water stays but doesn't count toward capacity check
-            // the water can overflow onto neighboring land cells
-            cell->setWaterDepth(std::max(0.0F, newWaterDepth));
+            float newDepth = cell->getWaterDepth() + deltaDepth;
+            cell->setWaterDepth(std::max(0.0F, newDepth));
         }
     }
 
+    // ─── Step 3: Derive velocity from flux differences ───────────────────
     updateVelocities();
 
     grid->updateHeightTexture();
 }
 
-auto FlowModel::calculateOutflow(int x, int y, int nx, int ny) const -> float {
-    const Cell* cell = grid->getCell(x, y);
-    const Cell* neighbor = grid->getCell(nx, ny);
-
-    if (cell == nullptr || neighbor == nullptr) {
-        return 0.0F;
-    }
-
-    const float h_total_i = cell->getTotalHeight();
-    const float h_total_j = neighbor->getTotalHeight();
-    const float heightDiff = std::max(0.0F, h_total_i - h_total_j);
-
-    // basic flow equation: Q = k * height_diff
-    float flow = flowCoefficient * heightDiff;
-
-    // consider neighbor's capacity constraints
-    if (neighbor->getType() == RIVER) {
-        const float availableCapacity = neighbor->getRiverCapacity() - neighbor->getWaterDepth();
-        flow = std::min(flow, std::max(0.0F, availableCapacity));
-    }
-
-    const float maxFlow = cell->getWaterDepth();
-    flow = std::min(flow, maxFlow);
-
-    return flow;
-}
-
-/*
- * Applies water sources - maintains constant water level at source cells
- * Water sources represent springs, lakes, or other permanent water bodies
- * They maintain a minimum water level regardless of outflow
- */
-void FlowModel::applyWaterSources() {
+void FlowModel::applyWaterSources() const {
     const auto width = grid->getWidth();
     const auto height = grid->getHeight();
 
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            const Cell* cell = grid->getCell(x, y);
+    for (auto y = 0; y < height; ++y) {
+        for (auto x = 0; x < width; ++x) {
+            auto *cell = grid->getCell(x, y);
             if (cell != nullptr && cell->isWaterSource()) {
-                // water sources maintain a minimum water level
-                // this simulates a spring or lake that has a constant inflow
-                const float minSourceLevel = cell->getSourceStrength();
-                if (cell->getWaterDepth() < minSourceLevel) {
-                    // add water up to the source strength
-                    const float deficit = minSourceLevel - cell->getWaterDepth();
-                    const int idx = y * width + x;
-                    flowBuffer[idx].netFlow += deficit / dt;
+                const float minLevel = cell->getSourceStrength();
+                if (cell->getWaterDepth() < minLevel) {
+                    cell->setWaterDepth(minLevel);
                 }
             }
         }
     }
 }
 
-/*
- * Applies rainfall - adds water to the entire grid if global rain is enabled
- */
-void FlowModel::applyRainfall() {
-    if (!globalRainEnabled || globalRainIntensity <= 0.0001f) {
+// =============================================================================
+// RAINFALL — add water depth directly
+// =============================================================================
+void FlowModel::applyRainfall() const {
+    if (!globalRainEnabled || globalRainIntensity <= 0.0001F) {
         return;
     }
 
     const auto width = grid->getWidth();
     const auto height = grid->getHeight();
-    const float cellArea = grid->getCellSize() * grid->getCellSize();
 
-    // Calculate volume of water to add per cell: Intensity (depth/sec) * Area
-    const float flowToAdd = globalRainIntensity * cellArea;
+    // Rain adds depth/second directly: Δh = intensity * dt
+    const float depthToAdd = globalRainIntensity * dt;
 
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            const Cell* cell = grid->getCell(x, y);
-            // Rain falls on everything except obstacles (assuming obstacles are solid walls)
+    for (auto y = 0; y < height; ++y) {
+        for (auto x = 0; x < width; ++x) {
+            Cell* cell = grid->getCell(x, y);
             if (cell != nullptr && cell->canFlowThrough()) {
-                const int idx = y * width + x;
-                flowBuffer[idx].netFlow += flowToAdd;
+                cell->addWater(depthToAdd);
             }
         }
     }
 }
 
-/*
- * Applies infiltration - water is absorbed by the ground on non-river, non-obstacle cells.
- * Only applies to LAND/EMPTY/RAIN cells (anything that is not a RIVER or WATER_SOURCE).
- */
-void FlowModel::applyInfiltration() {
-    if (infiltrationRate <= 0.0001f) {
+// =============================================================================
+// INFILTRATION — remove water on non-river/source cells
+// =============================================================================
+void FlowModel::applyInfiltration() const {
+    if (infiltrationRate <= 0.0001F) {
         return;
     }
-
     const auto width = grid->getWidth();
     const auto height = grid->getHeight();
-    const float cellArea = grid->getCellSize() * grid->getCellSize();
 
-    // Amount of water depth absorbed per step
-    const float absorb = infiltrationRate * dt;
-    const float flowToRemove = absorb * cellArea;
+    const float depthToRemove = infiltrationRate * dt;
 
-    for (int y = 0; y < static_cast<int>(height); ++y) {
-        for (int x = 0; x < static_cast<int>(width); ++x) {
-            const Cell* cell = grid->getCell(x, y);
+    for (auto y = 0; y < height; ++y) {
+        for (auto x = 0; x < width; ++x) {
+            Cell* cell = grid->getCell(x, y);
             if (cell == nullptr) {
                 continue;
             }
-            // Only absorb on non-river, non-water-source, non-obstacle cells
+
             const CellType type = cell->getType();
             if (type == RIVER || type == WATER_SOURCE || type == OBSTACLE) {
                 continue;
             }
-            if (cell->getWaterDepth() <= 0.0f) {
+            if (cell->getWaterDepth() <= 0.0F) {
                 continue;
             }
-            const int idx = y * width + x;
-            flowBuffer[idx].netFlow -= flowToRemove;
+
+            cell->removeWater(depthToRemove);
         }
     }
 }
 
-/*
- * updates cell velocities based on water surface gradients
- */
+// =============================================================================
+// VELOCITY — derived from horizontal flux differences
+// =============================================================================
 void FlowModel::updateVelocities() const {
-    const unsigned int width = grid->getWidth();
-    const unsigned int height = grid->getHeight();
-    const float cellSize = grid->getCellSize();
+    const auto g_width = grid->getWidth();
+    const auto g_height = grid->getHeight();
+    const float L = grid->getCellSize();
 
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            updateCellVelocity(x, y, cellSize);
+    for (auto y = 0; y < g_height; ++y) {
+        for (auto x = 0; x < g_width; ++x) {
+            Cell* cell = grid->getCell(x, y);
+            if (cell == nullptr) {
+                continue;
+            }
+
+            if (cell->getWaterDepth() < 0.01F) {
+                cell->setVelocity(QVector2D(0.0F, 0.0F));
+                continue;
+            }
+
+            const int idx = y * g_width + x;
+
+            float fluxL_in = 0.0F;
+            float fluxR_in = 0.0F;
+            float fluxU_in = 0.0F;
+            float fluxD_in = 0.0F;
+
+            if (grid->isValidPosition(x - 1, y)) {
+                fluxL_in = pipeBuffer[(y * g_width) + (x - 1)].flux[DIR_RIGHT];
+            }
+            if (grid->isValidPosition(x + 1, y)) {
+                fluxR_in = pipeBuffer[(y * g_width) + (x + 1)].flux[DIR_LEFT];
+            }
+            if (grid->isValidPosition(x, y - 1)) {
+                fluxU_in = pipeBuffer[((y - 1) * g_width) + x].flux[DIR_DOWN];
+            }
+            if (grid->isValidPosition(x, y + 1)) {
+                fluxD_in = pipeBuffer[((y + 1) * g_width) + x].flux[DIR_UP];
+            }
+
+            const float fluxL_out = pipeBuffer[idx].flux[DIR_LEFT];
+            const float fluxR_out = pipeBuffer[idx].flux[DIR_RIGHT];
+            const float fluxU_out = pipeBuffer[idx].flux[DIR_UP];
+            const float fluxD_out = pipeBuffer[idx].flux[DIR_DOWN];
+
+            // Net flux in X direction (positive = rightward)
+            const float netFluxX = (fluxL_in + fluxR_out - fluxR_in - fluxL_out) * 0.5F;
+            // Net flux in Y direction (positive = downward)
+            const float netFluxY = (fluxU_in + fluxD_out - fluxD_in - fluxU_out) * 0.5F;
+
+            // Velocity = flux / (L * waterDepth)
+            const float depthClamped = std::max(cell->getWaterDepth(), 0.01F);
+            const float vx = netFluxX / (L * depthClamped);
+            const float vy = netFluxY / (L * depthClamped);
+
+            cell->setVelocity(QVector2D(vx, vy));
         }
     }
-}
-
-void FlowModel::updateCellVelocity(int x, int y, const float cellSize) const {
-    Cell* cell = grid->getCell(x, y);
-    if (cell == nullptr) {
-        return;
-    }
-
-    if (cell->getWaterDepth() < 0.01F) {
-        cell->setVelocity(QVector2D(0.0F, 0.0F));
-        return;
-    }
-
-    const float gradX = calculateGradientX(x, y, cellSize);
-    const float gradY = calculateGradientY(x, y, cellSize);
-
-    // velocity proportional to gradient (simplified momentum equation)
-    const float velocityScale = 0.5F; // TODO: adjust for realistic velocities
-    QVector2D velocity(gradX * velocityScale, gradY * velocityScale);
-
-
-    velocity *= dampingFactor;
-
-    cell->setVelocity(velocity);
-}
-
-auto FlowModel::calculateGradientX(const int x, const int y, const float cellSize) const -> float {
-    if (!grid->isValidPosition(x - 1, y) || !grid->isValidPosition(x + 1, y)) {
-        return 0.0F;
-    }
-
-    const Cell* west = grid->getCell(x - 1, y);
-    const Cell* east = grid->getCell(x + 1, y);
-
-    if (west == nullptr || east == nullptr) {
-        return 0.0F;
-    }
-
-    return (west->getTotalHeight() - east->getTotalHeight()) / (2.0f * cellSize);
-}
-
-auto FlowModel::calculateGradientY(const int x, const int y, const float cellSize) const -> float {
-    if (!grid->isValidPosition(x, y - 1) || !grid->isValidPosition(x, y + 1)) {
-        return 0.0F;
-    }
-
-    const Cell* south = grid->getCell(x, y - 1);
-    const Cell* north = grid->getCell(x, y + 1);
-
-    if (south == nullptr || north == nullptr) {
-        return 0.0F;
-    }
-
-    return (south->getTotalHeight() - north->getTotalHeight()) / (2.0f * cellSize);
 }

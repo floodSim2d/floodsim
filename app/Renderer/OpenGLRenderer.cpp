@@ -8,7 +8,7 @@
 #include "../Simulation/Grid/Grid.h"
 #include "../Simulation/Grid/Cell.h"
 
-OpenGLRenderer::OpenGLRenderer(Grid* grid, QWidget* parent)
+OpenGLRenderer::OpenGLRenderer(Grid* grid,WaterRenderer* water_renderer ,QWidget* parent)
     : QOpenGLWidget(parent),
       grid(grid),
       cameraMode(CameraMode::TopDown),  // Start with TopDown for compatibility
@@ -21,9 +21,12 @@ OpenGLRenderer::OpenGLRenderer(Grid* grid, QWidget* parent)
       hoveredGridX(-1),
       hoveredGridY(-1),
       paintTool(nullptr),
-      cameraPanEnabled(false) {
+      cameraPanEnabled(false),
+      waterRenderer(water_renderer) {
     setMouseTracking(true);
 }
+
+OpenGLRenderer::~OpenGLRenderer() = default;
 
 void OpenGLRenderer::initializeGL() {
     initializeOpenGLFunctions();
@@ -40,6 +43,8 @@ void OpenGLRenderer::initializeGL() {
 
     if (grid != nullptr) {
         grid->initialize(this);
+
+        waterRenderer->initialize(this);
 
         // Center camera on grid - position directly above for top-down view
         const float gridCenterX = static_cast<float>(grid->getWidth()) * grid->getCellSize() * 0.5F;
@@ -68,8 +73,10 @@ void OpenGLRenderer::paintGL() {
     // uncomment for testing wireframe mode
     // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-    if (grid) {
-        grid->render(projectionMatrix, viewMatrix);
+    if (grid != nullptr && waterRenderer != nullptr) {
+        grid->render(projectionMatrix, viewMatrix, cameraPosition);
+
+        waterRenderer->render(projectionMatrix, viewMatrix, grid->getHeightTexture(), cameraPosition);
     }
 }
 
