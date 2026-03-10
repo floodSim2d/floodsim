@@ -14,7 +14,8 @@ SimulationToolbar::SimulationToolbar(Grid* grid, FlowModel* flowModel, OpenGLRen
       grid(grid),
       flowModel(flowModel),
       renderer(renderer),
-      cellInfoLabel(nullptr)
+      cellInfoLabel(nullptr),
+      viewToggleAction(nullptr)
 {
     setWindowTitle("Toolbar");
     setupActions();
@@ -45,6 +46,32 @@ void SimulationToolbar::setupActions() {
         flowModel->stop();
         grid->clearHeightmap();
         emit statusMessageRequested("Symulacja zresetowana");
+    });
+
+    // ---- 2D / 3D toggle ----
+    addSeparator();
+    viewToggleAction = addAction("🌐 3D");
+    viewToggleAction->setCheckable(true);
+    viewToggleAction->setChecked(false);  // starts in 2D (TopDown)
+    viewToggleAction->setToolTip(
+        "Przełącz między widokiem 2D (z góry, edycja) a 3D (orbit, nawigacja)\n"
+        "Skrót: klawisz Tab"
+    );
+
+    connect(viewToggleAction, &QAction::toggled, this, [this](bool is3D) {
+        renderer->setCameraMode(is3D ? CameraMode::Orbit : CameraMode::TopDown);
+        viewToggleAction->setText(is3D ? "🗺 2D" : "🌐 3D");
+        emit statusMessageRequested(is3D
+            ? "Widok 3D — LPM: obracaj | PPM: przesuń | Scroll: zoom"
+            : "Widok 2D — rysuj teren narzędziami z lewego panelu");
+    });
+
+    // Keep the button in sync when camera mode changes from outside (e.g. ToolPanel)
+    connect(renderer, &OpenGLRenderer::cameraPanToggled, this, [this](bool is3D) {
+        // Block signals to avoid re-entrancy loop
+        QSignalBlocker blocker(viewToggleAction);
+        viewToggleAction->setChecked(is3D);
+        viewToggleAction->setText(is3D ? "🗺 2D" : "🌐 3D");
     });
 }
 

@@ -35,6 +35,9 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow() override;
 
+protected:
+    void keyPressEvent(QKeyEvent* event) override;
+
 private slots:
     void onGenerateTerrainRequested(uint32_t seed);
 

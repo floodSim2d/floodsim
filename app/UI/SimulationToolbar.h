@@ -9,6 +9,7 @@ class FlowModel;
 class OpenGLRenderer;
 class QLabel;
 class Cell;
+class QAction;
 
 /**
  * @brief toolbar for simulation controls and cell information display
@@ -42,6 +43,7 @@ private:
     OpenGLRenderer* renderer;
 
     QLabel* cellInfoLabel;
+    QAction* viewToggleAction;   // "2D / 3D" toggle button
 };
 
 #endif // FLOODSIM_SIMULATIONTOOLBAR_H

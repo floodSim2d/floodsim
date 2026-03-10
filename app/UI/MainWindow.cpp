@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include <QAction>
+#include <QKeyEvent>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QStatusBar>
@@ -202,6 +203,19 @@ void MainWindow::connectSignals() {
     connect(renderer, &OpenGLRenderer::cellClicked, this, [this](int gridX, int gridY) {
         statusBar()->showMessage(QString("Kliknięto komórkę: (%1, %2)").arg(gridX).arg(gridY));
     });
+}
+
+void MainWindow::keyPressEvent(QKeyEvent* event) {
+    if (event->key() == Qt::Key_Tab) {
+        const bool is3D = renderer->getCameraMode() == CameraMode::Orbit;
+        renderer->setCameraMode(is3D ? CameraMode::TopDown : CameraMode::Orbit);
+        statusBar()->showMessage(is3D
+            ? "Widok 2D — rysuj teren narzędziami z lewego panelu"
+            : "Widok 3D — LPM: obracaj | PPM: przesuń | Scroll: zoom");
+        event->accept();
+        return;
+    }
+    QMainWindow::keyPressEvent(event);
 }
 
 void MainWindow::onGenerateTerrainRequested(uint32_t seed) {
