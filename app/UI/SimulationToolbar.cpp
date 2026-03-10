@@ -45,6 +45,11 @@ void SimulationToolbar::setupActions() {
     connect(resetAction, &QAction::triggered, this, [this]() {
         flowModel->stop();
         grid->clearHeightmap();
+        renderer->makeCurrent();
+        grid->updateHeightTexture();
+        grid->updateHeightTexture();
+        renderer->doneCurrent();
+        renderer->update();
         emit statusMessageRequested("Symulacja zresetowana");
     });
 
