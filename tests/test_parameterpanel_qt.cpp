@@ -97,7 +97,7 @@ private slots:
             }
         }
 
-        QCOMPARE(flowModel->getFlowCoefficient(), 5.0f);
+        QCOMPARE(flowModel->getPipeFriction(), 5.0f);
     }
 
     void testMaxDepthAppliedToGrid() {
