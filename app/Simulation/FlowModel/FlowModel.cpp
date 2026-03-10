@@ -188,7 +188,15 @@ void FlowModel::computeFlowStep() {
             const float deltaDepth = deltaVolume / cellArea;
 
             float newDepth = cell->getWaterDepth() + deltaDepth;
-            cell->setWaterDepth(std::max(0.0F, newDepth));
+            newDepth = std::max(0.0F, newDepth);
+
+            // Cap water depth to grid's maxDepth setting
+            const float maxDepth = grid->getMaxDepth();
+            if (newDepth > maxDepth) {
+                newDepth = maxDepth;
+            }
+
+            cell->setWaterDepth(newDepth);
         }
     }
 

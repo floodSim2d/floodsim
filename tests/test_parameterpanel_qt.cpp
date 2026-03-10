@@ -51,8 +51,8 @@ private slots:
     void testMaxDepthSlider() {
         QSlider* slider = parameterPanel->findChild<QSlider*>();
         QVERIFY(slider != nullptr);
-        QVERIFY(slider->value() >= MIN_WATER_DEPTH);
-        QVERIFY(slider->value() <= MAX_WATER_DEPTH);
+        QVERIFY(slider->value() >= World::MIN_WATER_DEPTH);
+        QVERIFY(slider->value() <= World::MAX_WATER_DEPTH);
     }
 
     void testApplyButton() {

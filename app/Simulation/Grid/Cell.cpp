@@ -1,7 +1,8 @@
 #include "Cell.h"
 
-#include "Grid.h"
-#include "../../Renderer/OpenGLRenderer.h"
+#include <QDataStream>
+
+#include "../../WorldConstants.h"
 
 Cell::Cell(const float height, const float water_depth, const bool is_obstacle, const bool is_river, const bool is_water_source,
            const float river_capacity, const float source_strength)
@@ -19,7 +20,7 @@ Cell::Cell(const float height, const float water_depth, const bool is_obstacle, 
 }
 
 void Cell::setTerrainHeight(float height) {
-    terrainHeight = std::max(-1.0F * MAX_WATER_DEPTH, height);
+    terrainHeight = std::clamp(height, World::TERRAIN_MIN_HEIGHT, World::TERRAIN_MAX_HEIGHT);
 }
 
 
@@ -51,7 +52,7 @@ void Cell::setType(CellType type) {
             rainArea = false;
             waterDepth = 0.0f;
             rainIntensity = 0.0f;
-            terrainHeight = CAMERA_MAX_HEIGHT;
+            terrainHeight = World::TERRAIN_MAX_HEIGHT;
             break;
         case RIVER:
             river = true;

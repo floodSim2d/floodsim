@@ -5,7 +5,7 @@
 #include <algorithm>
 
 #include "../../Utils/Logger.h"
-#include "../../Renderer/OpenGLRenderer.h"
+#include "../../WorldConstants.h"
 
 PaintTool::PaintTool(QObject* parent)
     : QObject(parent),
@@ -80,11 +80,11 @@ void PaintTool::applySingleCell(Cell* cell, bool isAlternateMode) const {
         case ToolType::Terrain:
             if (isAlternateMode) {
                 // right-click: lower terrain
-                cell->setTerrainHeight(std::max(cell->getTerrainHeight() - 0.5F, -1.0F * currentGrid->getMaxDepth()));
+                cell->setTerrainHeight(cell->getTerrainHeight() - World::PAINT_TERRAIN_STEP);
             } else {
                 // left-click: raise terrain (original behavior)
                 cell->setType(LAND);
-                cell->setTerrainHeight(std::min(cell->getTerrainHeight() + 0.5F, CAMERA_MAX_HEIGHT));
+                cell->setTerrainHeight(cell->getTerrainHeight() + World::PAINT_TERRAIN_STEP);
                 cell->setWaterDepth(0.0F);
                 cell->setSourceStrength(0.0F);
                 cell->setRainIntensity(0.0F);
@@ -109,12 +109,9 @@ void PaintTool::applySingleCell(Cell* cell, bool isAlternateMode) const {
         {
             if (isAlternateMode) {
                 // right-click: raise terrain and remove water
-                const float newHeight = cell->getTerrainHeight() + 0.5F;
-                if (newHeight <= CAMERA_MAX_HEIGHT) {
-                    cell->setTerrainHeight(newHeight);
-                }
+                cell->setTerrainHeight(cell->getTerrainHeight() + World::PAINT_RIVER_STEP);
                 // reduce water
-                cell->setWaterDepth(std::max(0.0F, cell->getWaterDepth() - 0.5F));
+                cell->setWaterDepth(std::max(0.0F, cell->getWaterDepth() - World::PAINT_RIVER_STEP));
                 // if no water left, convert to land
                 if (cell->getWaterDepth() < 0.01F && cell->getType() == RIVER) {
                     cell->setType(LAND);
@@ -123,13 +120,10 @@ void PaintTool::applySingleCell(Cell* cell, bool isAlternateMode) const {
                 // left-click: create river (original behavior)
                 cell->setType(RIVER);
 
-                const float newHeight = cell->getTerrainHeight() - 0.5F;
-                if (newHeight >= -1.0F * currentGrid->getMaxDepth()) {
-                    cell->setTerrainHeight(newHeight);
-                }
+                cell->setTerrainHeight(cell->getTerrainHeight() - World::PAINT_RIVER_STEP);
 
                 if (cell->getWaterDepth() < cell->getRiverCapacity()) {
-                    cell->setWaterDepth(std::min(cell->getWaterDepth() + 0.5F, cell->getRiverCapacity()));
+                    cell->setWaterDepth(std::min(cell->getWaterDepth() + World::PAINT_RIVER_STEP, cell->getRiverCapacity()));
                 }
             }
             break;
@@ -138,13 +132,10 @@ void PaintTool::applySingleCell(Cell* cell, bool isAlternateMode) const {
         case ToolType::WaterSource:
             if (isAlternateMode) {
                 // right-click: raise terrain and decrease water
-                const float newHeight = cell->getTerrainHeight() + 0.25F;
-                if (newHeight <= CAMERA_MAX_HEIGHT) {
-                    cell->setTerrainHeight(newHeight);
-                }
+                cell->setTerrainHeight(cell->getTerrainHeight() + World::PAINT_SOURCE_STEP);
 
                 // decrease source strength
-                float newStrength = cell->getSourceStrength() - 0.2F;
+                float newStrength = cell->getSourceStrength() - World::PAINT_SOURCE_STEP;
                 if (newStrength <= 0.0F) {
                     // remove source entirely
                     cell->setSourceStrength(0.0F);
@@ -161,23 +152,17 @@ void PaintTool::applySingleCell(Cell* cell, bool isAlternateMode) const {
                 if (cell->getType() != WATER_SOURCE) {
                     cell->setType(WATER_SOURCE);
                     // lower terrain to create depression
-                    const float newHeight = cell->getTerrainHeight() - 0.25F;
-                    if (newHeight >= -1.0F * currentGrid->getMaxDepth()) {
-                        cell->setTerrainHeight(newHeight);
-                    }
+                    cell->setTerrainHeight(cell->getTerrainHeight() - World::PAINT_SOURCE_STEP);
                     // start with moderate strength
-                    cell->setSourceStrength(0.5F);
-                    cell->setWaterDepth(0.5F);
+                    cell->setSourceStrength(World::PAINT_SOURCE_STEP);
+                    cell->setWaterDepth(World::PAINT_SOURCE_STEP);
                 } else {
-                    // deepen existing source and increase strength (capped at 3.0)
-                    const float newHeight = cell->getTerrainHeight() - 0.25F;
-                    if (newHeight >= -1.0F * currentGrid->getMaxDepth()) {
-                        cell->setTerrainHeight(newHeight);
-                    }
+                    // deepen existing source and increase strength (capped at grid max depth)
+                    cell->setTerrainHeight(cell->getTerrainHeight() - World::PAINT_SOURCE_STEP);
 
-                    float newStrength = std::min(cell->getSourceStrength() + 0.2F, 3.0F);
-                    cell->setSourceStrength(newStrength);
-                    cell->setWaterDepth(newStrength);
+                    float newStrength2 = std::min(cell->getSourceStrength() + World::PAINT_SOURCE_STEP, currentGrid->getMaxDepth());
+                    cell->setSourceStrength(newStrength2);
+                    cell->setWaterDepth(newStrength2);
                 }
             }
             break;

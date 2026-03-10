@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "../../WorldConstants.h"
+
 class Grid;
 
 /**
@@ -25,13 +27,13 @@ public:
         int   numRivers           = 5;      // więcej rzek (było 3)
         int   numSources          = 7;      // więcej źródeł wody (było 5)
         int   smoothPasses        = 2;      // gaussian blur iterations
-        float riverWaterDepth     = 6.0f;   // 2x głębsze koryto = szersza rzeka (było 3.5)
-        float sourceStrength      = 3.0f;   // mocniejsze źródła (było 2.5)
-        float landHeightScale     = 40.0f;  // 2x wyższe góry niż poprzednio (było 20)
+        float riverWaterDepth     = 6.0f;   // internal units (displayed: 60 m)
+        float sourceStrength      = 3.0f;   // internal units (displayed: 30 m)
+        float landHeightScale     = World::TERRAIN_GEN_HEIGHT_SCALE;  // skala gór (m)
         // Cały teren jest obniżany o tę wartość po przeskalowaniu.
         // Obszary które spadną poniżej 0 automatycznie dostaną wodę.
         // Np. 8.0 = ~13% mapy będzie pod wodą (zależy od rozkładu noise).
-        float seaLevelShift       = 12.0f;  // przywrócone (było 18.0)
+        float seaLevelShift       = World::TERRAIN_GEN_SEA_SHIFT;     // przesunięcie poziomu morza (m)
     };
 
     // Two separate constructors – avoids clang bug with default Config{} arg

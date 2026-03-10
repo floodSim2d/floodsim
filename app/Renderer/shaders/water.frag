@@ -75,9 +75,9 @@ vec3 getWaterColor(float depth) {
     vec3 mediumWater  = vec3(0.05, 0.30, 0.60);   // medium blue
     vec3 deepWater    = vec3(0.01, 0.08, 0.30);    // dark navy
 
-    // interpolate colors based on depth thresholds
-    float t1 = clamp(depth / 5.0, 0.0, 1.0);   // shallow -> medium (0-5 depth)
-    float t2 = clamp(depth / 20.0, 0.0, 1.0);   // medium -> deep (0-20 depth)
+    // interpolate colors based on depth thresholds (internal units, ×10 = displayed meters)
+    float t1 = clamp(depth / 5.0, 0.0, 1.0);   // shallow -> medium (0-5 units = 0-50 m)
+    float t2 = clamp(depth / 20.0, 0.0, 1.0);   // medium -> deep (0-20 units = 0-200 m)
 
     vec3 color = mix(shallowWater, mediumWater, t1);
     color = mix(color, deepWater, t2);
@@ -88,7 +88,6 @@ vec3 getWaterColor(float depth) {
 float getWaterOpacity(float depth) {
     // opacity increases with depth
     // shallow water is translucent, deep water is nearly opaque
-    // using sqrt for more visible shallow water
     return clamp(sqrt(depth) / 2.5, 0.25, 0.92);
 }
 
@@ -119,7 +118,7 @@ void main()
     float colorVar = noise(vWorldPos * 0.03) * 0.08 - 0.04;
     waterColor += vec3(colorVar * 0.5, colorVar, colorVar * 0.8);
 
-    // foam at edges
+    // foam at edges (within ~0.8 units = ~8 m of shoreline)
     float edgeFactor = clamp(1.0 - vWaterDepth / 0.8, 0.0, 1.0);
     float foamNoise = noise(vWorldPos * 2.0);
     float foamMask = edgeFactor * smoothstep(0.3, 0.6, foamNoise);

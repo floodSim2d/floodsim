@@ -8,6 +8,7 @@
 #include "../Simulation/Grid/Cell.h"
 #include "../Simulation/FlowModel/FlowModel.h"
 #include "../Renderer/OpenGLRenderer.h"
+#include "../WorldConstants.h"
 
 SimulationToolbar::SimulationToolbar(Grid* grid, FlowModel* flowModel, OpenGLRenderer* renderer, QWidget* parent)
     : QToolBar(parent),
@@ -94,17 +95,25 @@ void SimulationToolbar::setupCellInfoDisplay() {
 }
 
 void SimulationToolbar::updateCellInfo(int gridX, int gridY, const Cell& cell) {
-    QString label = QString("Wysokość terenu: %1").arg(cell.getTerrainHeight(), 0, 'f', 2);
+    const float cs = grid->getCellSize();
+    const float worldX = World::toDisplay(gridX * cs);
+    const float worldY = World::toDisplay(gridY * cs);
+
+    QString label = QString("Wysokość terenu: %1 %2")
+        .arg(World::toDisplay(cell.getTerrainHeight()), 0, 'f', 1)
+        .arg(World::UNIT_LABEL);
 
     if (const auto waterDepth = cell.getWaterDepth(); waterDepth > 0.0F) {
-        label += QString(" | Głębokość wody: %1").arg(waterDepth, 0, 'f', 2);
-        label += QString(" | Całkowita wysokość: %1").arg(cell.getTotalHeight(), 0, 'f', 2);
+        label += QString(" | Głębokość wody: %1 %2")
+            .arg(World::toDisplay(waterDepth), 0, 'f', 1).arg(World::UNIT_LABEL);
+        label += QString(" | Całkowita wys.: %1 %2")
+            .arg(World::toDisplay(cell.getTotalHeight()), 0, 'f', 1).arg(World::UNIT_LABEL);
     }
 
     if (const auto velocity = cell.getVelocity(); velocity.length() > 0.01F) {
-        label += QString(" | Prędkość wody: (%1, %2)")
-            .arg(velocity.x(), 0, 'f', 2)
-            .arg(velocity.y(), 0, 'f', 2);
+        label += QString(" | Prędkość wody: (%1, %2) m/s")
+            .arg(World::toDisplay(velocity.x()), 0, 'f', 1)
+            .arg(World::toDisplay(velocity.y()), 0, 'f', 1);
     }
 
     if (cell.getType() == OBSTACLE) {
@@ -114,7 +123,9 @@ void SimulationToolbar::updateCellInfo(int gridX, int gridY, const Cell& cell) {
         label += QString(" | Rzeka");
     }
     if (cell.getType() == WATER_SOURCE) {
-        label += QString(" | Źródło wody (siła: %1)").arg(cell.getSourceStrength(), 0, 'f', 2);
+        label += QString(" | Źródło wody (siła: %1 %2)")
+            .arg(World::toDisplay(cell.getSourceStrength()), 0, 'f', 1)
+            .arg(World::UNIT_LABEL);
     }
     if (cell.isRainArea()) {
         label += QString(" | Deszcz (intensywność: %1)").arg(cell.getRainIntensity(), 0, 'f', 2);
@@ -123,5 +134,9 @@ void SimulationToolbar::updateCellInfo(int gridX, int gridY, const Cell& cell) {
         label += QString(" | Przelew wody!");
     }
 
-    cellInfoLabel->setText(QString("Pozycja: (%1, %2) | %3").arg(gridX).arg(gridY).arg(label));
+    cellInfoLabel->setText(QString("Komórka: (%1, %2) | Pozycja: (%3, %4) %5 | %6")
+        .arg(gridX).arg(gridY)
+        .arg(worldX, 0, 'f', 1).arg(worldY, 0, 'f', 1)
+        .arg(World::UNIT_LABEL)
+        .arg(label));
 }

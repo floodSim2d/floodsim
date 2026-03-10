@@ -11,6 +11,7 @@
 #include "../Simulation/Grid/Grid.h"
 #include "../Simulation/FlowModel/FlowModel.h"
 #include "../Renderer/OpenGLRenderer.h"
+#include "../WorldConstants.h"
 
 ParameterPanel::ParameterPanel(Grid* grid, FlowModel* flowModel, OpenGLRenderer* renderer, QWidget* parent)
     : QWidget(parent),
@@ -40,17 +41,20 @@ void ParameterPanel::setupUI() {
     groupLayout->addWidget(new QLabel("K:", groupBox));
     groupLayout->addWidget(flowCoefficientSpinBox);
 
-    groupLayout->addWidget(new QLabel("Max głębokość:", groupBox));
+    groupLayout->addWidget(new QLabel("Max głębokość (m):", groupBox));
 
     maxDepthSlider = new QSlider(Qt::Horizontal, groupBox);
-    maxDepthSlider->setMinimum(MIN_WATER_DEPTH);
-    maxDepthSlider->setMaximum(MAX_WATER_DEPTH);
-    maxDepthSlider->setValue(DEFAULT_WATER_DEPTH);
+    maxDepthSlider->setMinimum(static_cast<int>(World::toDisplay(World::MIN_WATER_DEPTH)));
+    maxDepthSlider->setMaximum(static_cast<int>(World::toDisplay(World::MAX_WATER_DEPTH)));
+    maxDepthSlider->setValue(static_cast<int>(World::toDisplay(World::DEFAULT_WATER_DEPTH)));
+    maxDepthSlider->setSingleStep(10);
     maxDepthSlider->setTickPosition(QSlider::TicksBelow);
-    maxDepthSlider->setTickInterval(10);
+    maxDepthSlider->setTickInterval(100);
     groupLayout->addWidget(maxDepthSlider);
 
-    depthValueLabel = new QLabel(QString::number(maxDepthSlider->value()), groupBox);
+    depthValueLabel = new QLabel(QString("%1 %2")
+        .arg(maxDepthSlider->value())
+        .arg(World::UNIT_LABEL), groupBox);
     depthValueLabel->setAlignment(Qt::AlignCenter);
     groupLayout->addWidget(depthValueLabel);
 
@@ -108,7 +112,9 @@ void ParameterPanel::setupUI() {
     panelLayout->addStretch();
 
     connect(maxDepthSlider, &QSlider::valueChanged, this, [this](int value) {
-        depthValueLabel->setText(QString::number(value));
+        depthValueLabel->setText(QString("%1 %2")
+            .arg(value)
+            .arg(World::UNIT_LABEL));
     });
 
     connect(applyButton, &QPushButton::clicked, this, &ParameterPanel::applyParameters);
@@ -136,13 +142,16 @@ void ParameterPanel::applyParameters() {
     const auto kValue = static_cast<float>(flowCoefficientSpinBox->value());
     flowModel->setPipeFriction(kValue);
 
-    const auto newDepth = static_cast<float>(maxDepthSlider->value());
-    grid->setMaxDepth(newDepth);
+    // Slider stores display values (meters); convert back to internal units
+    const float displayDepth = static_cast<float>(maxDepthSlider->value());
+    const float internalDepth = displayDepth / World::DISPLAY_SCALE;
+    grid->setMaxDepth(internalDepth);
     renderer->updateProjectionMatrix();
 
-    QString message = QString("Parametry zastosowane: K=%1, Max głębokość=%2")
+    QString message = QString("Parametry zastosowane: K=%1, Max głębokość=%2 %3")
         .arg(kValue, 0, 'f', 2)
-        .arg(newDepth, 0, 'f', 1);
+        .arg(displayDepth, 0, 'f', 0)
+        .arg(World::UNIT_LABEL);
 
     emit parametersApplied(message);
 }

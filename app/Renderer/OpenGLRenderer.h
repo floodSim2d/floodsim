@@ -8,21 +8,9 @@
 #include <QString>
 
 #include "../Simulation/Tools/PaintTool.h"
+#include "../WorldConstants.h"
 #include "WaterRenderer.h"
 
-constexpr float CAMERA_ZOOM_MAX_ORTHO = 100.0F;
-constexpr float CAMERA_ZOOM_MIN_ORTHO = 10.0F;
-constexpr float CAMERA_ZOOM_MAX_PERSP = 800.0F;
-constexpr float CAMERA_ZOOM_MIN_PERSP = 5.0F;
-constexpr float CAMERA_MAX_HEIGHT = 1000.0F;
-
-// Tilt limits for Orbit mode (degrees)
-// pitch = -89° → camera almost directly above (top-down view)
-// pitch = -5°  → camera almost at horizon level
-// NOTE: pitch is negative because the camera sits *above* the target:
-//       offset.z = -sin(pitchRad) keeps Z positive (above ground).
-constexpr float CAMERA_PITCH_MIN = -89.0f;  // nearly top-down
-constexpr float CAMERA_PITCH_MAX = -5.0f;   // nearly horizontal
 
 class Cell;
 class Grid;

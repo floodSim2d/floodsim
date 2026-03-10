@@ -72,22 +72,22 @@ float voronoi(vec2 p) {
 // TERRAIN COLOR FUNCTIONS
 // ============================================================================
 
-// Below sea level — dark muddy ground
+// Below sea level — dark muddy ground (< 0)
 vec3 getBelowSeaLevelColor(float height) {
-    float depthFactor = clamp(-height / 20.0, 0.0, 1.0);
+    float depthFactor = clamp(-height / 50.0, 0.0, 1.0);
     vec3 surface = vec3(0.08, 0.22, 0.06);
     vec3 deep    = vec3(0.03, 0.08, 0.03);
     vec3 base = mix(surface, deep, depthFactor);
 
     // muddy texture
     vec2 wp = fragWorldPos.xy;
-    float mud = fbm(wp * 0.8, 3) * 0.08 - 0.04;
+    float mud = fbm(wp * 0.15, 3) * 0.08 - 0.04;
     base += vec3(mud * 0.6, mud, mud * 0.4);
 
     return base;
 }
 
-// Low grassland (0.0 - 50.0)
+// Lowland grassland & fields (0 - 80) → displayed as 0-800 m
 vec3 getLowGrasslandColor(float height) {
     vec2 wp = fragWorldPos.xy;
 
@@ -114,34 +114,34 @@ vec3 getLowGrasslandColor(float height) {
     float grain = hash(floor(wp * 5.0)) * 0.06 - 0.03;
     grassBase += vec3(grain * 0.3, grain, grain * 0.3);
 
-    float heightFade = height / 50.0;
+    float heightFade = height / 80.0;
     grassBase *= mix(1.0, 0.85, heightFade);
 
     return grassBase;
 }
 
-// Brown terrain (50.0 - 100.0) — dirt, dry earth, rocky soil
+// Coniferous forest & alpine meadows (80 - 150) → displayed as 800-1500 m
 vec3 getPaintedTerrainColor(float height) {
     vec2 wp = fragWorldPos.xy;
 
-    vec3 lightBrown = vec3(0.55, 0.42, 0.28);
-    vec3 darkBrown  = vec3(0.32, 0.22, 0.12);
-    vec3 reddish    = vec3(0.45, 0.28, 0.15);
+    vec3 darkGreen  = vec3(0.08, 0.25, 0.06);   // ciemny las iglasty
+    vec3 brownGreen = vec3(0.20, 0.30, 0.10);    // łąka alpejska
+    vec3 dirtPatch  = vec3(0.35, 0.28, 0.18);    // ścieżki, przesieki
 
-    float t = (height - 50.0) / 50.0;
-    vec3 base = mix(lightBrown, darkBrown, t);
+    float t = (height - 80.0) / 70.0;
+    vec3 base = mix(darkGreen, brownGreen, t);
 
     // Large rocky patches
-    float rockPatch = fbm(wp * 0.08, 3);
-    base = mix(base, reddish, smoothstep(0.4, 0.6, rockPatch) * 0.35);
+    float rockPatch = fbm(wp * 0.02, 3);
+    base = mix(base, dirtPatch, smoothstep(0.4, 0.6, rockPatch) * 0.35);
 
-    float cracks = voronoi(wp * 0.4);
+    float cracks = voronoi(wp * 0.08);
     base *= 0.9 + cracks * 0.15;
 
-    float grain = fbm(wp * 1.5, 2) * 0.1 - 0.05;
+    float grain = fbm(wp * 0.3, 2) * 0.1 - 0.05;
     base += vec3(grain);
 
-    float stones = hash(floor(wp * 2.0));
+    float stones = hash(floor(wp * 0.4));
     if (stones > 0.92) {
         base = mix(base, vec3(0.5, 0.48, 0.44), 0.4);
     }
@@ -149,7 +149,7 @@ vec3 getPaintedTerrainColor(float height) {
     return base;
 }
 
-// High terrain (100.0 - 150.0) — rocky with patches of moss
+// Rocky alpine zone (150 - 220) → displayed as 1500-2200 m
 vec3 getRockyMountainColor(float height) {
     vec2 wp = fragWorldPos.xy;
 
@@ -157,25 +157,27 @@ vec3 getRockyMountainColor(float height) {
     vec3 darkRock = vec3(0.28, 0.26, 0.24);
     vec3 moss     = vec3(0.15, 0.28, 0.10);
 
-    float t = (height - 100.0) / 50.0;
+    float t = (height - 150.0) / 70.0;
     vec3 base = mix(darkRock, rock, t);
 
-    float strata = noise(vec2(wp.x * 0.15, wp.y * 0.15 + height * 0.1));
+    float strata = noise(vec2(wp.x * 0.03, wp.y * 0.03 + height * 0.02));
     base = mix(base, darkRock, strata * 0.3);
 
-    float cracks = voronoi(wp * 0.25);
+    float cracks = voronoi(wp * 0.05);
     base *= 0.85 + cracks * 0.2;
 
+    // Moss only at lower part of this zone (kosodrzewina)
+    float mossFade = 1.0 - smoothstep(150.0, 180.0, height);
     float mossMask = smoothstep(0.0, 0.15, cracks);
-    base = mix(moss, base, mossMask);
+    base = mix(mix(moss, base, mossMask), base, 1.0 - mossFade * 0.5);
 
-    float grain = hash(floor(wp * 3.0)) * 0.06 - 0.03;
+    float grain = hash(floor(wp * 0.6)) * 0.06 - 0.03;
     base += vec3(grain);
 
     return base;
 }
 
-// Snow level (150.0+)
+// Snow & ice zone (220+) → displayed as 2200+ m
 vec3 getSnowLevelColor(float height) {
     vec2 wp = fragWorldPos.xy;
 
@@ -183,30 +185,31 @@ vec3 getSnowLevelColor(float height) {
     vec3 blueSnow = vec3(0.82, 0.86, 0.95);
     vec3 rockPeek = vec3(0.45, 0.43, 0.40);
 
-    float t = clamp((height - 150.0) / 100.0, 0.0, 1.0);
+    // Transition: 220 = mostly rock with snow patches, 280+ = full snow
+    float t = clamp((height - 220.0) / 60.0, 0.0, 1.0);
 
     // snow coverage increases with height
     vec3 base = mix(rockPeek, snow, t);
 
     // wind-blown snow pattern
-    float windPattern = fbm(vec2(wp.x * 0.1 + wp.y * 0.05, wp.y * 0.08), 3);
+    float windPattern = fbm(vec2(wp.x * 0.02 + wp.y * 0.01, wp.y * 0.015), 3);
     base = mix(base, blueSnow, windPattern * 0.25);
 
     // exposed rock patches at lower snow levels
     if (t < 0.6) {
-        float exposure = fbm(wp * 0.15, 3);
+        float exposure = fbm(wp * 0.03, 3);
         float rockMask = smoothstep(0.5, 0.7, exposure) * (1.0 - t);
         base = mix(base, rockPeek, rockMask * 0.5);
     }
 
     // fine snow sparkle
-    float sparkle = hash(floor(wp * 8.0));
+    float sparkle = hash(floor(wp * 1.5));
     if (sparkle > 0.95) {
         base += vec3(0.05);
     }
 
     // subtle blue shadows in dips
-    float shadow = fbm(wp * 0.3, 2);
+    float shadow = fbm(wp * 0.06, 2);
     base = mix(base, blueSnow, shadow * 0.1);
 
     return base;
@@ -218,32 +221,37 @@ vec3 getSnowLevelColor(float height) {
 void main() {
     vec3 terrainColor;
 
-    // each pixel gets a slightly different threshold so biome borders are irregular not straight lines.
+    // each pixel gets a slightly different threshold so biome borders are irregular
     vec2 wp = fragWorldPos.xy;
-    float transitionNoise = fbm(wp * 0.12, 3) * 20.0 - 10.0; // ±10 height units of variation
+    float transitionNoise = fbm(wp * 0.03, 3) * 20.0 - 10.0; // ±10 internal units (±100 m displayed)
     float h = terrainHeight + transitionNoise;
 
-    // transition width - the zone where two biomes blend together
+    // transition width in internal units (12 units = 120 m displayed)
     float tw = 12.0;
 
     vec3 belowSea   = getBelowSeaLevelColor(terrainHeight);
     vec3 grass      = getLowGrasslandColor(terrainHeight);
-    vec3 dirt       = getPaintedTerrainColor(terrainHeight);
+    vec3 forest     = getPaintedTerrainColor(terrainHeight);
     vec3 highRock   = getRockyMountainColor(terrainHeight);
     vec3 snow       = getSnowLevelColor(terrainHeight);
 
-    // blend between adjacent biomes using smoothstep on the noise-perturbed height
+    // Internal thresholds (×10 = displayed meters):
+    //   < 0       → < 0 m        below sea level
+    //   0-80      → 0-800 m      lowland grassland
+    //   80-150    → 800-1500 m   coniferous forest
+    //   150-220   → 1500-2200 m  rocky alpine
+    //   220+      → 2200+ m      snow & ice
     if (h < 0.0) {
         float blend = smoothstep(-tw, 0.0, h);
         terrainColor = mix(belowSea, grass, blend);
-    } else if (h < 50.0) {
-        float blend = smoothstep(50.0 - tw, 50.0, h);
-        terrainColor = mix(grass, dirt, blend);
-    } else if (h < 100.0) {
-        float blend = smoothstep(100.0 - tw, 100.0, h);
-        terrainColor = mix(dirt, highRock, blend);
+    } else if (h < 80.0) {
+        float blend = smoothstep(80.0 - tw, 80.0, h);
+        terrainColor = mix(grass, forest, blend);
     } else if (h < 150.0) {
         float blend = smoothstep(150.0 - tw, 150.0, h);
+        terrainColor = mix(forest, highRock, blend);
+    } else if (h < 220.0) {
+        float blend = smoothstep(220.0 - tw, 220.0, h);
         terrainColor = mix(highRock, snow, blend);
     } else {
         terrainColor = snow;

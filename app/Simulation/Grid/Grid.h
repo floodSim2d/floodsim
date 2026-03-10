@@ -11,10 +11,7 @@
 #include <vector>
 
 #include "Cell.h"
-
-constexpr float DEFAULT_WATER_DEPTH = 50.0F;
-constexpr float MAX_WATER_DEPTH = 200.0F;
-constexpr float MIN_WATER_DEPTH = 10.0F;
+#include "../../WorldConstants.h"
 
 class Grid {
    public:
