@@ -37,14 +37,14 @@ QVector3D panAnchorWorld;   // punkt "przyklejony" do kursora podczas pana
 ```
 lookAt(cameraPosition, cameraTarget, up=(0,1,0))
 ```
-Kamera zawieszona jest pionowo nad mapą na stałej wysokości `CAMERA_MAX_HEIGHT = 1000`.
+Kamera zawieszona jest pionowo nad mapą na stałej wysokości `World::CAMERA_TOP_DOWN_HEIGHT = 800`.
 
 ### Macierz projekcji
 Ortograficzna, symetryczna względem środka ekranu:
 ```
 ortho(-zoom*aspect, +zoom*aspect, -zoom, +zoom, nearPlane, farPlane)
 ```
-`zoom` mieści się w zakresie `[10, 100]`. `farPlane = CAMERA_MAX_HEIGHT + maxWaterDepth`.
+`zoom` mieści się w zakresie `[50, 800]`. `farPlane = World::CAMERA_TOP_DOWN_HEIGHT + maxWaterDepth`.
 
 ### Zoom (kółko myszy)
 ```
@@ -179,11 +179,11 @@ gridY = floor(groundPt.y / cellSize)
 
 | Stała | Wartość | Opis |
 |---|---|---|
-| `CAMERA_ZOOM_MIN_ORTHO` | 10 | Min. zoom ortograficzny |
-| `CAMERA_ZOOM_MAX_ORTHO` | 100 | Max. zoom ortograficzny |
-| `CAMERA_ZOOM_MIN_PERSP` | 5 | Min. odległość w Orbit |
-| `CAMERA_ZOOM_MAX_PERSP` | 800 | Max. odległość w Orbit |
-| `CAMERA_MAX_HEIGHT` | 1000 | Wysokość kamery TopDown |
-| `CAMERA_PITCH_MIN` | −89° | Prawie z góry |
-| `CAMERA_PITCH_MAX` | −5° | Prawie przy horyzoncie |
+| `World::CAMERA_ZOOM_MIN_ORTHO` | 50 | Min. zoom ortograficzny (m) |
+| `World::CAMERA_ZOOM_MAX_ORTHO` | 1500 | Max. zoom ortograficzny (m) |
+| `World::CAMERA_ZOOM_MIN_PERSP` | 10 | Min. odległość w Orbit (m) |
+| `World::CAMERA_ZOOM_MAX_PERSP` | 5000 | Max. odległość w Orbit (m) |
+| `World::CAMERA_TOP_DOWN_HEIGHT` | 3500 | Wysokość kamery TopDown (m) |
+| `World::CAMERA_PITCH_MIN` | −89° | Prawie z góry |
+| `World::CAMERA_PITCH_MAX` | −5° | Prawie przy horyzoncie |
 

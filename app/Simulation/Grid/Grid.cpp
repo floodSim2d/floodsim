@@ -185,7 +185,7 @@ void Grid::createMesh() {
 }
 
 void Grid::createPBOs() {
-    pboSize = static_cast<size_t>(width) * height * 3 * sizeof(float); // 3 values per cell
+    pboSize = static_cast<size_t>(width) * height * 4 * sizeof(float); // 4 values per cell (RGBA)
 
     // 2 pbos for double buffering
     for (auto & i : pbo) {
@@ -219,7 +219,7 @@ void Grid::createHeightTexture() {
     heightTexture = new QOpenGLTexture(QOpenGLTexture::Target2D);
     heightTexture->create();
     heightTexture->setSize(width, height);
-    heightTexture->setFormat(QOpenGLTexture::RGB32F);
+    heightTexture->setFormat(QOpenGLTexture::RGBA32F);
     heightTexture->allocateStorage();
 
     heightTexture->setMinificationFilter(QOpenGLTexture::Nearest);
@@ -248,7 +248,7 @@ void Grid::updateHeightTexture(){
     pbo[currentPboIndex]->bind();
     glContext->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
                                 width, height,
-                                GL_RGB, GL_FLOAT, nullptr); // nullptr = read from PBO
+                                GL_RGBA, GL_FLOAT, nullptr); // nullptr = read from PBO
     pbo[currentPboIndex]->release();
 
     // bind next PBO and map it for writing
@@ -258,9 +258,10 @@ void Grid::updateHeightTexture(){
 
     if (ptr != nullptr) {
         for (unsigned int i = 0; i < heightMap.size(); i++) {
-            ptr[i * 3 + 0] = heightMap[i].getType() == OBSTACLE ? 1.0F : 0.0F;
-            ptr[i * 3 + 1] = heightMap[i].getTerrainHeight();
-            ptr[i * 3 + 2] = heightMap[i].getWaterDepth();
+            ptr[i * 4 + 0] = heightMap[i].getType() == OBSTACLE ? 1.0F : 0.0F;
+            ptr[i * 4 + 1] = heightMap[i].getTerrainHeight();
+            ptr[i * 4 + 2] = heightMap[i].getWaterDepth();
+            ptr[i * 4 + 3] = heightMap[i].getVelocity().length(); // velocity magnitude
         }
         pbo[nextPboIndex]->unmap();
     }

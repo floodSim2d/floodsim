@@ -14,8 +14,10 @@ class QLabel;
  * @brief right panel containing simulation parameters
  *
  * responsible for:
- * - flow coefficient (K) configuration
+ * - pipe friction (damping coefficient) configuration
  * - max water depth configuration
+ * - simulation speed control
+ * - weather (rain) and soil (infiltration) parameters
  * - applying parameter changes
  */
 class ParameterPanel : public QWidget {
@@ -43,6 +45,8 @@ private:
     QDoubleSpinBox* flowCoefficientSpinBox;
     QSlider* maxDepthSlider;
     QLabel* depthValueLabel;
+    QSlider* simSpeedSlider;
+    QLabel* simSpeedValueLabel;
     QSlider* infiltrationSlider;
     QLabel* infiltrationValueLabel;
 };

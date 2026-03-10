@@ -1,21 +1,24 @@
 #include "SimulationToolbar.h"
 
 #include <QAction>
-#include <QInputDialog>
 #include <QLabel>
 
 #include "../Simulation/Grid/Grid.h"
 #include "../Simulation/Grid/Cell.h"
 #include "../Simulation/FlowModel/FlowModel.h"
 #include "../Renderer/OpenGLRenderer.h"
+#include "../WorldConstants.h"
 
 SimulationToolbar::SimulationToolbar(Grid* grid, FlowModel* flowModel, OpenGLRenderer* renderer, QWidget* parent)
     : QToolBar(parent),
       grid(grid),
       flowModel(flowModel),
       renderer(renderer),
-      cellInfoLabel(nullptr),
-      viewToggleAction(nullptr)
+      positionLabel(nullptr),
+      terrainLabel(nullptr),
+      waterLabel(nullptr),
+      velocityLabel(nullptr),
+      typeLabel(nullptr)
 {
     setWindowTitle("Toolbar");
     setupActions();
@@ -27,7 +30,7 @@ void SimulationToolbar::setupActions() {
     QAction* pauseAction = addAction("⏸ Stop");
     QAction* stepAction  = addAction("⏭ Krok");
     addSeparator();
-    QAction* resetAction = addAction("Reset");
+    QAction* resetAction = addAction("🔄 Reset");
 
     connect(playAction, &QAction::triggered, this, [this]() {
         flowModel->play();
@@ -52,76 +55,84 @@ void SimulationToolbar::setupActions() {
         renderer->update();
         emit statusMessageRequested("Symulacja zresetowana");
     });
-
-    // ---- 2D / 3D toggle ----
-    addSeparator();
-    viewToggleAction = addAction("🌐 3D");
-    viewToggleAction->setCheckable(true);
-    viewToggleAction->setChecked(false);  // starts in 2D (TopDown)
-    viewToggleAction->setToolTip(
-        "Przełącz między widokiem 2D (z góry, edycja) a 3D (orbit, nawigacja)\n"
-        "Skrót: klawisz Tab"
-    );
-
-    connect(viewToggleAction, &QAction::toggled, this, [this](bool is3D) {
-        renderer->setCameraMode(is3D ? CameraMode::Orbit : CameraMode::TopDown);
-        viewToggleAction->setText(is3D ? "🗺 2D" : "🌐 3D");
-        emit statusMessageRequested(is3D
-            ? "Widok 3D — LPM: obracaj | PPM: przesuń | Scroll: zoom"
-            : "Widok 2D — rysuj teren narzędziami z lewego panelu");
-    });
-
-    // Keep the button in sync when camera mode changes from outside (e.g. ToolPanel)
-    connect(renderer, &OpenGLRenderer::cameraPanToggled, this, [this](bool is3D) {
-        // Block signals to avoid re-entrancy loop
-        QSignalBlocker blocker(viewToggleAction);
-        viewToggleAction->setChecked(is3D);
-        viewToggleAction->setText(is3D ? "🗺 2D" : "🌐 3D");
-    });
 }
 
 void SimulationToolbar::setupCellInfoDisplay() {
     addSeparator();
 
-    cellInfoLabel = new QLabel("Wysokość: ---", this);
-    cellInfoLabel->setStyleSheet(
-        "QLabel { padding: 5px; background-color: rgba(0, 0, 0, 0.1); border-radius: 3px; }"
-    );
-    cellInfoLabel->setMinimumWidth(200);
-    addWidget(cellInfoLabel);
+    const QString labelStyle =
+        "QLabel { padding: 3px 6px; background-color: rgba(0, 0, 0, 0.08); border-radius: 3px; font-family: monospace; }";
+
+    positionLabel = new QLabel("Pozycja: ---", this);
+    positionLabel->setStyleSheet(labelStyle);
+    positionLabel->setFixedWidth(180);
+    addWidget(positionLabel);
+
+    terrainLabel = new QLabel("Teren: ---", this);
+    terrainLabel->setStyleSheet(labelStyle);
+    terrainLabel->setFixedWidth(140);
+    addWidget(terrainLabel);
+
+    waterLabel = new QLabel("Woda: ---", this);
+    waterLabel->setStyleSheet(labelStyle);
+    waterLabel->setFixedWidth(140);
+    addWidget(waterLabel);
+
+    velocityLabel = new QLabel("V: ---", this);
+    velocityLabel->setStyleSheet(labelStyle);
+    velocityLabel->setFixedWidth(250);
+    addWidget(velocityLabel);
+
+    typeLabel = new QLabel("Typ: ---", this);
+    typeLabel->setStyleSheet(labelStyle);
+    typeLabel->setFixedWidth(160);
+    addWidget(typeLabel);
 
     connect(renderer, &OpenGLRenderer::cellHovered, this, &SimulationToolbar::updateCellInfo);
 }
 
 void SimulationToolbar::updateCellInfo(int gridX, int gridY, const Cell& cell) {
-    QString label = QString("Wysokość terenu: %1").arg(cell.getTerrainHeight(), 0, 'f', 2);
+    const float cs = grid->getCellSize();
+    const float worldX = World::toDisplay(static_cast<float>(gridX) * cs);
+    const float worldY = World::toDisplay(static_cast<float>(gridY) * cs);
 
-    if (const auto waterDepth = cell.getWaterDepth(); waterDepth > 0.0F) {
-        label += QString(" | Głębokość wody: %1").arg(waterDepth, 0, 'f', 2);
-        label += QString(" | Całkowita wysokość: %1").arg(cell.getTotalHeight(), 0, 'f', 2);
+    positionLabel->setText(QString("(%1, %2) %3")
+        .arg(worldX, 0, 'f', 0).arg(worldY, 0, 'f', 0).arg(World::UNIT_LABEL));
+
+    terrainLabel->setText(QString("Teren: %1 %2")
+        .arg(World::toDisplay(cell.getTerrainHeight()), 0, 'f', 1)
+        .arg(World::UNIT_LABEL));
+
+    if (cell.getWaterDepth() > 0.01F) {
+        waterLabel->setText(QString("Woda: %1 %2")
+            .arg(World::toDisplay(cell.getWaterDepth()), 0, 'f', 1)
+            .arg(World::UNIT_LABEL));
+    } else {
+        waterLabel->setText("Woda: ---");
     }
 
     if (const auto velocity = cell.getVelocity(); velocity.length() > 0.01F) {
-        label += QString(" | Prędkość wody: (%1, %2)")
-            .arg(velocity.x(), 0, 'f', 2)
-            .arg(velocity.y(), 0, 'f', 2);
+        velocityLabel->setText(QString("V: (%1, %2) |%3| %4/s")
+            .arg(World::toDisplay(velocity.x()), 0, 'f', 1)
+            .arg(World::toDisplay(velocity.y()), 0, 'f', 1)
+            .arg(World::toDisplay(velocity.length()), 0, 'f', 2)
+            .arg(World::UNIT_LABEL));
+    } else {
+        velocityLabel->setText("V: ---");
     }
 
-    if (cell.getType() == OBSTACLE) {
-        label += QString(" | Przeszkoda");
+    QString typeStr;
+    switch (cell.getType()) {
+        case OBSTACLE:     typeStr = "Przeszkoda"; break;
+        case RIVER:        typeStr = "Rzeka"; break;
+        case WATER_SOURCE: typeStr = QString("Zrodlo (%1 %2)")
+            .arg(World::toDisplay(cell.getSourceStrength()), 0, 'f', 1)
+            .arg(World::UNIT_LABEL); break;
+        case LAND:         typeStr = "Teren"; break;
+        default:           typeStr = "---"; break;
     }
-    if (cell.getType() == RIVER) {
-        label += QString(" | Rzeka");
+    if (cell.getWaterDepth() > cell.getRiverCapacity() && cell.getType() == RIVER) {
+        typeStr += " [przelew!]";
     }
-    if (cell.getType() == WATER_SOURCE) {
-        label += QString(" | Źródło wody (siła: %1)").arg(cell.getSourceStrength(), 0, 'f', 2);
-    }
-    if (cell.isRainArea()) {
-        label += QString(" | Deszcz (intensywność: %1)").arg(cell.getRainIntensity(), 0, 'f', 2);
-    }
-    if (cell.getWaterDepth() > cell.getRiverCapacity()) {
-        label += QString(" | Przelew wody!");
-    }
-
-    cellInfoLabel->setText(QString("Pozycja: (%1, %2) | %3").arg(gridX).arg(gridY).arg(label));
+    typeLabel->setText(typeStr);
 }

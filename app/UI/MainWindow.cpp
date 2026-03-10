@@ -16,6 +16,7 @@
 #include "../Simulation/Tools/PaintTool.h"
 #include "../Simulation/Tools/TerrainGenerator.h"
 #include "../Renderer/OpenGLRenderer.h"
+#include "../WorldConstants.h"
 #include "ToolPanel.h"
 #include "ParameterPanel.h"
 #include "SimulationToolbar.h"
@@ -32,7 +33,8 @@ MainWindow::MainWindow(QWidget *parent)
       simulationToolbar(nullptr),
       fileMenuHandler(nullptr)
 {
-    grid = std::make_unique<Grid>(200, 200, 1.0F, DEFAULT_WATER_DEPTH);
+    grid = std::make_unique<Grid>(World::DEFAULT_GRID_WIDTH, World::DEFAULT_GRID_HEIGHT,
+                                   World::DEFAULT_CELL_SIZE, World::DEFAULT_WATER_DEPTH);
     paintTool = new PaintTool(this);
     waterRenderer = std::make_unique<WaterRenderer>(grid.get());
     renderer = new OpenGLRenderer(grid.get(), waterRenderer.get(), this);
@@ -111,7 +113,7 @@ void MainWindow::setupComponents() {
 
     // Przycisk "Generuj teren" po prawej stronie toolbara symulacji
     simulationToolbar->addSeparator();
-    QAction* genAction = simulationToolbar->addAction("🗺 Generuj teren");
+    QAction* genAction = simulationToolbar->addAction("🏔 Generuj teren");
     connect(genAction, &QAction::triggered, this, [this]() {
         bool ok = false;
         const int seed = QInputDialog::getInt(

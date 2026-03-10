@@ -14,8 +14,8 @@ OpenGLRenderer::OpenGLRenderer(Grid* grid, WaterRenderer* water_renderer, QWidge
       grid(grid),
       waterRenderer(water_renderer),
       cameraMode(CameraMode::TopDown),
-      cameraZoom(CAMERA_ZOOM_MAX_ORTHO),
-      cameraPosition(0.0F, 0.0F, CAMERA_MAX_HEIGHT),
+      cameraZoom(World::CAMERA_ZOOM_MAX_ORTHO),
+      cameraPosition(0.0F, 0.0F, World::CAMERA_TOP_DOWN_HEIGHT),
       cameraTarget(0.0F, 0.0F, 0.0F),
       cameraYaw(-90.0f),
       cameraPitch(-45.0f),
@@ -56,7 +56,7 @@ void OpenGLRenderer::initializeGL() {
 
         const float gridCenterX = static_cast<float>(grid->getWidth())  * grid->getCellSize() * 0.5F;
         const float gridCenterY = static_cast<float>(grid->getHeight()) * grid->getCellSize() * 0.5F;
-        cameraPosition = QVector3D(gridCenterX, gridCenterY, CAMERA_MAX_HEIGHT);
+        cameraPosition = QVector3D(gridCenterX, gridCenterY, World::CAMERA_TOP_DOWN_HEIGHT);
         cameraTarget   = QVector3D(gridCenterX, gridCenterY, 0.0F);
         orbitFocusPoint = cameraTarget;
     }
@@ -64,7 +64,7 @@ void OpenGLRenderer::initializeGL() {
     const float gridWorldWidth  = static_cast<float>(grid->getWidth())  * grid->getCellSize();
     const float gridWorldHeight = static_cast<float>(grid->getHeight()) * grid->getCellSize();
     cameraZoom = std::max(gridWorldWidth, gridWorldHeight) * 0.6F;
-    cameraZoom = std::max(CAMERA_ZOOM_MIN_ORTHO, std::min(CAMERA_ZOOM_MAX_ORTHO, cameraZoom));
+    cameraZoom = std::max(World::CAMERA_ZOOM_MIN_ORTHO, std::min(World::CAMERA_ZOOM_MAX_ORTHO, cameraZoom));
 
     setupCamera();
 }
@@ -126,9 +126,9 @@ void OpenGLRenderer::updateProjectionMatrix() {
 
     if (cameraMode == CameraMode::TopDown) {
         const float orthoSize = cameraZoom;
-        const float maxDepth  = grid ? grid->getMaxDepth() : DEFAULT_WATER_DEPTH;
+        const float maxDepth  = grid ? grid->getMaxDepth() : World::DEFAULT_WATER_DEPTH;
         const float nearPlane = 0.1F;
-        const float farPlane  = CAMERA_MAX_HEIGHT + maxDepth;
+        const float farPlane  = World::CAMERA_TOP_DOWN_HEIGHT + maxDepth;
 
         if (aspect > 1.0f) {
             projectionMatrix.ortho(-orthoSize * aspect, orthoSize * aspect,
@@ -162,9 +162,9 @@ void OpenGLRenderer::setCameraPanEnabled(bool enabled) {
 
 void OpenGLRenderer::setZoom(const float zoom) {
     if (cameraMode == CameraMode::TopDown) {
-        cameraZoom = std::max(CAMERA_ZOOM_MIN_ORTHO, std::min(CAMERA_ZOOM_MAX_ORTHO, zoom));
+        cameraZoom = std::max(World::CAMERA_ZOOM_MIN_ORTHO, std::min(World::CAMERA_ZOOM_MAX_ORTHO, zoom));
     } else {
-        cameraZoom = std::max(CAMERA_ZOOM_MIN_PERSP, std::min(CAMERA_ZOOM_MAX_PERSP, zoom));
+        cameraZoom = std::max(World::CAMERA_ZOOM_MIN_PERSP, std::min(World::CAMERA_ZOOM_MAX_PERSP, zoom));
     }
 
     updateProjectionMatrix();
@@ -202,7 +202,7 @@ void OpenGLRenderer::rotateCamera(float yawDelta, float pitchDelta) {
     cameraYaw   += yawDelta   * 0.4f;
     cameraPitch += pitchDelta * 0.4f;
     // Clamp pitch: PITCH_MAX is -5° (nearly horizontal), PITCH_MIN is -89° (top-down)
-    cameraPitch = std::max(CAMERA_PITCH_MIN, std::min(CAMERA_PITCH_MAX, cameraPitch));
+    cameraPitch = std::max(World::CAMERA_PITCH_MIN, std::min(World::CAMERA_PITCH_MAX, cameraPitch));
     setupCamera();
 }
 
@@ -219,21 +219,21 @@ void OpenGLRenderer::resetCamera() {
     const float gridCenterY = grid->getHeight() * grid->getCellSize() * 0.5F;
 
     if (cameraMode == CameraMode::TopDown) {
-        cameraPosition  = QVector3D(gridCenterX, gridCenterY, CAMERA_MAX_HEIGHT);
+        cameraPosition  = QVector3D(gridCenterX, gridCenterY, World::CAMERA_TOP_DOWN_HEIGHT);
         cameraTarget    = QVector3D(gridCenterX, gridCenterY, 0.0F);
         orbitFocusPoint = cameraTarget;
 
         const float gridWorldWidth  = grid->getWidth()  * grid->getCellSize();
         const float gridWorldHeight = grid->getHeight() * grid->getCellSize();
         cameraZoom = std::max(gridWorldWidth, gridWorldHeight) * 0.6F;
-        cameraZoom = std::max(CAMERA_ZOOM_MIN_ORTHO, std::min(CAMERA_ZOOM_MAX_ORTHO, cameraZoom));
+        cameraZoom = std::max(World::CAMERA_ZOOM_MIN_ORTHO, std::min(World::CAMERA_ZOOM_MAX_ORTHO, cameraZoom));
     } else {
         cameraTarget    = QVector3D(gridCenterX, gridCenterY, 0.0F);
         orbitFocusPoint = cameraTarget;
         cameraYaw   = -90.0f;   // looking from south
         cameraPitch = -45.0f;   // 45° tilt downward
         cameraZoom  = std::max(grid->getWidth(), grid->getHeight()) * grid->getCellSize() * 0.8f;
-        cameraZoom  = std::max(CAMERA_ZOOM_MIN_PERSP, std::min(CAMERA_ZOOM_MAX_PERSP, cameraZoom));
+        cameraZoom  = std::max(World::CAMERA_ZOOM_MIN_PERSP, std::min(World::CAMERA_ZOOM_MAX_PERSP, cameraZoom));
     }
 
     updateProjectionMatrix();
@@ -277,18 +277,12 @@ void OpenGLRenderer::mousePressEvent(QMouseEvent* event) {
 
     if (cameraMode == CameraMode::Orbit) {
         if (event->button() == Qt::LeftButton) {
-            // --- ORBIT: remember the ground point under the cursor ---
-            // Do NOT call setupCamera() here — that would snap the camera
-            // before the user moves the mouse, causing a visible jump.
             isOrbiting = true;
             QVector3D groundPt;
             if (screenToGroundPlane(event->pos().x(), event->pos().y(), groundPt)) {
                 orbitFocusPoint = groundPt;
-                // cameraTarget stays where it is; we only set the orbit pivot.
-                // It will be updated to orbitFocusPoint on the first move event.
             }
         } else if (event->button() == Qt::RightButton) {
-            // --- PAN: anchor the ground point under the cursor ---
             isPanning = true;
             QVector3D groundPt;
             if (screenToGroundPlane(event->pos().x(), event->pos().y(), groundPt)) {
@@ -325,36 +319,23 @@ void OpenGLRenderer::mouseMoveEvent(QMouseEvent* event) {
     const QPoint delta = event->pos() - lastMousePos;
 
     if (cameraMode == CameraMode::Orbit) {
-        // ------------------------------------------------------------------
-        // LEFT BUTTON — ORBIT around the focus point picked at press time
-        // ------------------------------------------------------------------
         if ((event->buttons() & Qt::LeftButton) && isOrbiting) {
-            // Rotate yaw & pitch
             cameraYaw   += static_cast<float>(delta.x()) * 0.4f;
             cameraPitch -= static_cast<float>(delta.y()) * 0.4f;
-            cameraPitch  = std::max(CAMERA_PITCH_MIN, std::min(CAMERA_PITCH_MAX, cameraPitch));
+            cameraPitch  = std::max(World::CAMERA_PITCH_MIN, std::min(World::CAMERA_PITCH_MAX, cameraPitch));
 
-            // On the first move event the target snaps to the orbit focus point.
-            // Subsequent moves keep rotating around that same point.
             cameraTarget = orbitFocusPoint;
             setupCamera();
             lastMousePos = event->pos();
         }
 
-        // ------------------------------------------------------------------
-        // RIGHT BUTTON — GRAB-AND-DRAG (pan)
-        // The world point that was under the cursor at press-time must stay
-        // under the cursor at all times → move cameraTarget so it does.
-        // ------------------------------------------------------------------
         if ((event->buttons() & Qt::RightButton) && isPanning) {
             QVector3D currentGroundPt;
             if (screenToGroundPlane(event->pos().x(), event->pos().y(), currentGroundPt)) {
-                // Shift target so the anchor point returns under the cursor
                 const QVector3D shift = panAnchorWorld - currentGroundPt;
                 cameraTarget    += shift;
-                orbitFocusPoint += shift;   // keep orbit focus in sync
+                orbitFocusPoint += shift;
                 setupCamera();
-                // anchor stays fixed in world space — no update needed
             }
             lastMousePos = event->pos();
         }
@@ -404,8 +385,6 @@ void OpenGLRenderer::mouseMoveEvent(QMouseEvent* event) {
 }
 
 void OpenGLRenderer::mouseReleaseEvent(QMouseEvent* event) {
-    // Each button independently clears its own state flag.
-    // This prevents releasing one button from killing the other button's drag.
     if (event->button() == Qt::LeftButton) {
         isOrbiting = false;
         if (cameraMode == CameraMode::TopDown) {
@@ -430,24 +409,10 @@ void OpenGLRenderer::mouseReleaseEvent(QMouseEvent* event) {
 
 // ============================================================================
 // Scroll — ZOOM TO CURSOR (Google Maps style)
-// Algorithm:
-//   1. Find the world point currently under the cursor (groundPt).
-//   2. Scale the camera distance (cameraZoom) by the zoom factor.
-//   3. Move cameraTarget toward the cursor point so that groundPt stays
-//      at the same screen position after the zoom.
-//
-// Math:  before zoom: screenPos(cursorPt) == cursor
-//        after zoom:  camera moved; to keep cursorPt on screen we need
-//                     cameraTarget' such that cursorPt maps to cursor again.
-//        Since the view is a perspective camera at distance R looking at T:
-//            cursorPt stays fixed ↔ T' = cursorPt + (T - cursorPt) * (R'/R)
 // ============================================================================
 void OpenGLRenderer::wheelEvent(QWheelEvent* event) {
-    // Prefer pixelDelta for smooth macOS trackpad scrolling;
-    // fall back to angleDelta (mouse wheel gives 120 per notch).
     float scrollAmount = 0.0f;
     if (!event->pixelDelta().isNull()) {
-        // pixelDelta is in physical pixels — scale to roughly match angleDelta behaviour
         scrollAmount = static_cast<float>(event->pixelDelta().y()) * 4.0f;
     } else {
         scrollAmount = static_cast<float>(event->angleDelta().y());
@@ -455,12 +420,8 @@ void OpenGLRenderer::wheelEvent(QWheelEvent* event) {
 
     if (cameraMode == CameraMode::Orbit) {
         if ((event->modifiers() & Qt::ShiftModifier) != 0) {
-            // Shift+scroll → vertical pan (raise/lower the look-at point)
             moveCameraVertical(scrollAmount * 0.1f);
         } else {
-            // ---- ZOOM TO CURSOR ----
-            // scrollAmount > 0 → scroll up → zoom IN (reduce distance)
-            // zoomFactor < 1 zooms in, > 1 zooms out
             const float zoomFactor = 1.0f - (scrollAmount / 1200.0f);
 
             QVector3D cursorGroundPt;
@@ -470,15 +431,11 @@ void OpenGLRenderer::wheelEvent(QWheelEvent* event) {
                 cursorGroundPt);
 
             const float oldZoom = cameraZoom;
-            const float newZoom = std::max(CAMERA_ZOOM_MIN_PERSP,
-                                  std::min(CAMERA_ZOOM_MAX_PERSP, cameraZoom * zoomFactor));
+            const float newZoom = std::max(World::CAMERA_ZOOM_MIN_PERSP,
+                                  std::min(World::CAMERA_ZOOM_MAX_PERSP, cameraZoom * zoomFactor));
             cameraZoom = newZoom;
 
             if (hasCursorPt && oldZoom > 0.0f) {
-                // Keep cursorGroundPt fixed on screen:
-                //   T' = cursorPt + (T - cursorPt) * (newZoom / oldZoom)
-                // When zooming IN (newZoom < oldZoom), ratio < 1 → target
-                // moves toward the cursor point. ✓
                 const float ratio = newZoom / oldZoom;
                 cameraTarget    = cursorGroundPt + (cameraTarget    - cursorGroundPt) * ratio;
                 orbitFocusPoint = cursorGroundPt + (orbitFocusPoint - cursorGroundPt) * ratio;
@@ -503,7 +460,6 @@ bool OpenGLRenderer::screenToGridCoords(const int screenX, const int screenY,
     if (!grid) return false;
 
     if (cameraMode == CameraMode::TopDown) {
-        // Orthographic: unproject directly to world XY plane
         const float ndcX = (2.0f * screenX) / width()  - 1.0f;
         const float ndcY = 1.0f - (2.0f * screenY) / height();
 
@@ -519,7 +475,6 @@ bool OpenGLRenderer::screenToGridCoords(const int screenX, const int screenY,
         gridX = static_cast<int>(worldPos.x() / cellSize);
         gridY = static_cast<int>(worldPos.y() / cellSize);
     } else {
-        // Orbit: raycast onto Z=0 ground plane (XY terrain system)
         QVector3D groundPt;
         if (!screenToGroundPlane(screenX, screenY, groundPt)) return false;
 
@@ -530,3 +485,7 @@ bool OpenGLRenderer::screenToGridCoords(const int screenX, const int screenY,
 
     return grid->isValidPosition(gridX, gridY);
 }
+
+
+
+
