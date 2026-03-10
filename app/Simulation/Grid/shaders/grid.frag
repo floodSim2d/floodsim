@@ -149,8 +149,8 @@ vec3 getPaintedTerrainColor(float height) {
     return base;
 }
 
-// High terrain (100.0 - 150.0) — rocky with patches of grass
-vec3 getHighGrasslandColor(float height) {
+// High terrain (100.0 - 150.0) — rocky with patches of moss
+vec3 getRockyMountainColor(float height) {
     vec2 wp = fragWorldPos.xy;
 
     vec3 rock     = vec3(0.42, 0.40, 0.38);
@@ -229,7 +229,7 @@ void main() {
     vec3 belowSea   = getBelowSeaLevelColor(terrainHeight);
     vec3 grass      = getLowGrasslandColor(terrainHeight);
     vec3 dirt       = getPaintedTerrainColor(terrainHeight);
-    vec3 highRock   = getHighGrasslandColor(terrainHeight);
+    vec3 highRock   = getRockyMountainColor(terrainHeight);
     vec3 snow       = getSnowLevelColor(terrainHeight);
 
     // blend between adjacent biomes using smoothstep on the noise-perturbed height
