@@ -113,7 +113,7 @@ void MainWindow::setupComponents() {
 
     // Przycisk "Generuj teren" po prawej stronie toolbara symulacji
     simulationToolbar->addSeparator();
-    QAction* genAction = simulationToolbar->addAction("🗺 Generuj teren");
+    QAction* genAction = simulationToolbar->addAction("🏔 Generuj teren");
     connect(genAction, &QAction::triggered, this, [this]() {
         bool ok = false;
         const int seed = QInputDialog::getInt(

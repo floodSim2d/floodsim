@@ -4,6 +4,7 @@ in vec2 fragTexCoord;
 in float vTerrainHeight;
 in float vWaterDepth;
 in float vWaterSurfaceHeight;
+in float vVelocityMag;
 in vec2 vWorldPos;
 in vec3 vFragWorldPos;
 in vec3 vFragNormal;
@@ -100,7 +101,11 @@ void main()
 
     vec3 waterColor = getWaterColor(vWaterDepth);
 
-    // --- Voronoi cell pattern ---
+    // ─── Velocity visualization ────────────────────────────────────────
+    // Normalize velocity: ~0.5 = gentle flow, ~2+ = fast rapids
+    float velNorm = clamp(vVelocityMag / 3.0, 0.0, 1.0);
+
+    // --- Voronoi cell pattern — intensity modulated by velocity ---
     float cells1 = voronoi(vWorldPos * 0.4);
     float cells2 = voronoi(vWorldPos * 0.9 + vec2(17.3, 31.7));
     float cellPattern = cells1 * 0.6 + cells2 * 0.4;
@@ -117,6 +122,31 @@ void main()
 
     float colorVar = noise(vWorldPos * 0.03) * 0.08 - 0.04;
     waterColor += vec3(colorVar * 0.5, colorVar, colorVar * 0.8);
+
+    // --- Turbulent foam (velocity-driven) ---
+    // More noise layers and brighter foam when water flows fast
+    if (velNorm > 0.05) {
+        float turbNoise1 = noise(vWorldPos * 1.5);
+        float turbNoise2 = noise(vWorldPos * 3.0 + vec2(55.0, 33.0));
+        float turbulence = turbNoise1 * 0.6 + turbNoise2 * 0.4;
+
+        // Foam mask: appears more with higher velocity
+        float foamThreshold = mix(0.75, 0.3, velNorm); // lower threshold = more foam
+        float turbFoam = smoothstep(foamThreshold, foamThreshold + 0.15, turbulence) * velNorm;
+
+        vec3 turbFoamColor = vec3(0.85, 0.92, 0.98); // white foam
+        waterColor = mix(waterColor, turbFoamColor, turbFoam * 0.6);
+    }
+
+    // --- Whitewater rapids for very fast flow ---
+    if (velNorm > 0.4) {
+        float rapidsFactor = smoothstep(0.4, 0.9, velNorm);
+        float rapidsNoise = noise(vWorldPos * 5.0) * noise(vWorldPos * 2.0 + vec2(17.0, 41.0));
+        float rapidsMask = smoothstep(0.15, 0.4, rapidsNoise) * rapidsFactor;
+
+        vec3 whitewater = vec3(0.92, 0.96, 1.0);
+        waterColor = mix(waterColor, whitewater, rapidsMask * 0.5);
+    }
 
     // foam at edges (within ~0.8 units = ~8 m of shoreline)
     float edgeFactor = clamp(1.0 - vWaterDepth / 0.8, 0.0, 1.0);

@@ -12,6 +12,7 @@ out vec2 fragTexCoord;
 out float vTerrainHeight;
 out float vWaterDepth;
 out float vWaterSurfaceHeight;
+out float vVelocityMag;
 out vec2 vWorldPos;
 out vec3 vFragWorldPos;
 out vec3 vFragNormal;
@@ -20,10 +21,11 @@ void main()
 {
     fragTexCoord = texCoord;
 
-    // R = obstacle, G = terrain height, B = water depth
-    vec3 heightData = texture(heightMap, fragTexCoord).rgb;
+    // R = obstacle, G = terrain height, B = water depth, A = velocity magnitude
+    vec4 heightData = texture(heightMap, fragTexCoord).rgba;
     vTerrainHeight = heightData.g;
     vWaterDepth = heightData.b;
+    vVelocityMag = heightData.a;
 
     vWaterSurfaceHeight = vTerrainHeight + vWaterDepth;
 
